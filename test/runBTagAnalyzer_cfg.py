@@ -30,7 +30,7 @@ options.register('wantSummary', False,
     VarParsing.varType.bool,
     "Print out trigger and timing summary"
 )
-options.register('usePFchs', True,
+options.register('usePFchs', False,
     VarParsing.multiplicity.singleton,
     VarParsing.varType.bool,
     "Use PFchs"
@@ -65,7 +65,7 @@ options.register('fatJetPtMin', 150.0,
     VarParsing.varType.float,
     "Minimum pT for fat jets (default is 150 GeV)"
 )
-options.register('useTTbarFilter', False,
+options.register('useTTbarFilter', True,
     VarParsing.multiplicity.singleton,
     VarParsing.varType.bool,
     "Use TTbar filter"
@@ -75,7 +75,7 @@ options.register('useTopProjections', False,
     VarParsing.varType.bool,
     "Use top projections"
 )
-options.register('miniAOD', False,
+options.register('miniAOD', True,
     VarParsing.multiplicity.singleton,
     VarParsing.varType.bool,
     "Running on miniAOD"
@@ -92,7 +92,7 @@ options.register('useExplicitJTA', False,
 )
 
 ## 'maxEvents' is already registered by the Framework, changing default value
-options.setDefault('maxEvents', 10)
+options.setDefault('maxEvents', -1)
 
 options.parseArguments()
 
@@ -236,7 +236,8 @@ process.MessageLogger.cerr.default.limit = 10
 process.source = cms.Source(
 "PoolSource",
 fileNames = cms.untracked.vstring(
-  '/store/relval/CMSSW_7_4_0_pre8/RelValZpTT_1500_13TeV/GEN-SIM-RECO/MCRUN2_74_V7-v1/00000/58F8AA88-4BBD-E411-95D4-0025905A48F0.root'
+  '/store/relval/CMSSW_7_4_0_pre8//RelValTTbar_13/MINIAODSIM/PU50ns_MCRUN2_74_V6-v1/00000/90A385BF-60BD-E411-85D8-0025905938A4.root',
+  '/store/relval/CMSSW_7_4_0_pre8//RelValTTbar_13/MINIAODSIM/PU50ns_MCRUN2_74_V6-v1/00000/A8E0D9B1-60BD-E411-BFC1-0025905A6080.root'
 #'file:/nfs/dust/cms/user/marchesi/74Xdev/testfile/22E552FD-23B7-E411-B680-002618943911.root'
 )
 )
@@ -430,14 +431,16 @@ from RecoJets.JetProducers.ak4GenJets_cfi import ak4GenJets
 from RecoJets.JetProducers.SubJetParameters_cfi import SubJetParameters
 ## AK8 soft drop jets
 process.ak8GenJetsNoNuSoftDrop = ak4GenJets.clone(
-    SubJetParameters,
     rParam = cms.double(0.8),
-    src = (cms.InputTag("packedGenParticlesForJetsNoNu") if options.miniAOD else cms.InputTag("genParticlesForJetsNoNu"+postfix)),
+    src = cms.InputTag("packedGenParticlesForJetsNoNu"),
     useSoftDrop = cms.bool(True),
+    zcut = cms.double(0.1),
     beta = cms.double(0.0),
+    R0   = cms.double(0.8),
+    useExplicitGhosts = cms.bool(True),
     writeCompound = cms.bool(True),
     jetCollInstanceName=cms.string("SubJets")
-    )
+)
 
 from RecoJets.JetProducers.ak4PFJetsSoftDrop_cfi import ak4PFJetsSoftDrop
 process.ak8PFJetsSoftDrop = ak4PFJetsSoftDrop.clone(
@@ -657,54 +660,62 @@ if options.useTTbarFilter:
     process.load("RecoBTag.PerformanceMeasurements.TTbarSelectionProducer_cfi")
 
     process.ttbarselectionproducer.isData       = options.runOnData
-    process.ttbarselectionproducer.electronColl = cms.InputTag('selectedPatElectrons'+postfix)
-    process.ttbarselectionproducer.muonColl     = cms.InputTag('selectedPatMuons'+postfix)
-    process.ttbarselectionproducer.jetColl      = cms.InputTag('selectedPatJets'+postfix)
-    process.ttbarselectionproducer.metColl      = cms.InputTag('patMETs'+postfix)
+    if options.miniAOD:
+        process.ttbarselectionproducer.electronColl = cms.InputTag('slimmedElectrons')
+        process.ttbarselectionproducer.muonColl     = cms.InputTag('slimmedMuons')
+        process.ttbarselectionproducer.jetColl      = cms.InputTag('selectedPatJets'+postfix)
+        process.ttbarselectionproducer.metColl      = cms.InputTag('slimmedMETs')
+    else:
+        process.ttbarselectionproducer.electronColl = cms.InputTag('selectedPatElectrons'+postfix)
+        process.ttbarselectionproducer.muonColl     = cms.InputTag('selectedPatMuons'+postfix)
+        process.ttbarselectionproducer.jetColl      = cms.InputTag('selectedPatJets'+postfix)
+        process.ttbarselectionproducer.metColl      = cms.InputTag('patMETs'+postfix)
+
+        ## Change the cone size of muon isolation to 0.3
+        getattr(process,"pfIsolatedMuons"+postfix).isolationValueMapsCharged = cms.VInputTag( cms.InputTag( 'muPFIsoValueCharged03'+postfix ) )
+        getattr(process,"pfIsolatedMuons"+postfix).isolationValueMapsNeutral = cms.VInputTag( cms.InputTag( 'muPFIsoValueNeutral03'+postfix ), cms.InputTag( 'muPFIsoValueGamma03'+postfix ) )
+        getattr(process,"pfIsolatedMuons"+postfix).deltaBetaIsolationValueMap = cms.InputTag( 'muPFIsoValuePU03'+postfix )
+        getattr(process,"pfIsolatedMuons"+postfix).combinedIsolationCut = cms.double(9999.)
+        getattr(process,"pfIsolatedMuons"+postfix).isolationCut = cms.double(9999.)
+
+        getattr(process,"patMuons"+postfix).isolationValues = cms.PSet(
+            pfNeutralHadrons = cms.InputTag('muPFIsoValueNeutral03'+postfix),
+            pfPhotons = cms.InputTag('muPFIsoValueGamma03'+postfix),
+            pfChargedHadrons = cms.InputTag('muPFIsoValueCharged03'+postfix),
+            pfChargedAll = cms.InputTag('muPFIsoValueChargedAll03'+postfix),
+            pfPUChargedHadrons = cms.InputTag('muPFIsoValuePU03'+postfix)
+            )
+        
+        ## Change the cone size of electron isolation to 0.3
+        getattr(process,'pfElectrons'+postfix).isolationValueMapsCharged  = cms.VInputTag(cms.InputTag('elPFIsoValueCharged03PFId'+postfix))
+        getattr(process,'pfElectrons'+postfix).deltaBetaIsolationValueMap = cms.InputTag('elPFIsoValuePU03PFId'+postfix)
+        getattr(process,'pfElectrons'+postfix).isolationValueMapsNeutral  = cms.VInputTag(cms.InputTag('elPFIsoValueNeutral03PFId'+postfix), cms.InputTag('elPFIsoValueGamma03PFId'+postfix))
+        
+        getattr(process,'pfIsolatedElectrons'+postfix).isolationValueMapsCharged = cms.VInputTag(cms.InputTag('elPFIsoValueCharged03PFId'+postfix))
+        getattr(process,'pfIsolatedElectrons'+postfix).deltaBetaIsolationValueMap = cms.InputTag('elPFIsoValuePU03PFId'+postfix)
+        getattr(process,'pfIsolatedElectrons'+postfix).isolationValueMapsNeutral = cms.VInputTag(cms.InputTag('elPFIsoValueNeutral03PFId'+postfix), cms.InputTag('elPFIsoValueGamma03PFId'+postfix))
+        getattr(process,'pfIsolatedElectrons'+postfix).combinedIsolationCut = cms.double(9999.)
+        getattr(process,'pfIsolatedElectrons'+postfix).isolationCut = cms.double(9999.)
+        getattr(process,'patElectrons'+postfix).electronIDSources.mvaTrigV0    = cms.InputTag("mvaTrigV0")
+        getattr(process,'patElectrons'+postfix).electronIDSources.mvaNonTrigV0 = cms.InputTag("mvaNonTrigV0")
+        getattr(process,'patElectrons'+postfix).isolationValues = cms.PSet(
+            pfChargedHadrons = cms.InputTag('elPFIsoValueCharged03PFId'+postfix),
+            pfChargedAll = cms.InputTag('elPFIsoValueChargedAll03PFId'+postfix),
+            pfPUChargedHadrons = cms.InputTag('elPFIsoValuePU03PFId'+postfix),
+            pfNeutralHadrons = cms.InputTag('elPFIsoValueNeutral03PFId'+postfix),
+            pfPhotons = cms.InputTag('elPFIsoValueGamma03PFId'+postfix)
+            )
+
+        ## Electron ID
+        process.load("EGamma.EGammaAnalysisTools.electronIdMVAProducer_cfi")
+        process.eidMVASequence = cms.Sequence( process.mvaTrigV0 + process.mvaNonTrigV0 )
+
     process.ttbarselectionfilter.select_ee   = True
     process.ttbarselectionfilter.select_mumu = True
     process.ttbarselectionfilter.select_emu  = True
     process.ttbarselectionfilter.Keep_all_events  = False
 
-    ## Change the cone size of muon isolation to 0.3
-    getattr(process,"pfIsolatedMuons"+postfix).isolationValueMapsCharged = cms.VInputTag( cms.InputTag( 'muPFIsoValueCharged03'+postfix ) )
-    getattr(process,"pfIsolatedMuons"+postfix).isolationValueMapsNeutral = cms.VInputTag( cms.InputTag( 'muPFIsoValueNeutral03'+postfix ), cms.InputTag( 'muPFIsoValueGamma03'+postfix ) )
-    getattr(process,"pfIsolatedMuons"+postfix).deltaBetaIsolationValueMap = cms.InputTag( 'muPFIsoValuePU03'+postfix )
-    getattr(process,"pfIsolatedMuons"+postfix).combinedIsolationCut = cms.double(9999.)
-    getattr(process,"pfIsolatedMuons"+postfix).isolationCut = cms.double(9999.)
 
-    getattr(process,"patMuons"+postfix).isolationValues = cms.PSet(
-        pfNeutralHadrons = cms.InputTag('muPFIsoValueNeutral03'+postfix),
-        pfPhotons = cms.InputTag('muPFIsoValueGamma03'+postfix),
-        pfChargedHadrons = cms.InputTag('muPFIsoValueCharged03'+postfix),
-        pfChargedAll = cms.InputTag('muPFIsoValueChargedAll03'+postfix),
-        pfPUChargedHadrons = cms.InputTag('muPFIsoValuePU03'+postfix)
-    )
-
-    ## Change the cone size of electron isolation to 0.3
-    getattr(process,'pfElectrons'+postfix).isolationValueMapsCharged  = cms.VInputTag(cms.InputTag('elPFIsoValueCharged03PFId'+postfix))
-    getattr(process,'pfElectrons'+postfix).deltaBetaIsolationValueMap = cms.InputTag('elPFIsoValuePU03PFId'+postfix)
-    getattr(process,'pfElectrons'+postfix).isolationValueMapsNeutral  = cms.VInputTag(cms.InputTag('elPFIsoValueNeutral03PFId'+postfix), cms.InputTag('elPFIsoValueGamma03PFId'+postfix))
-
-    getattr(process,'pfIsolatedElectrons'+postfix).isolationValueMapsCharged = cms.VInputTag(cms.InputTag('elPFIsoValueCharged03PFId'+postfix))
-    getattr(process,'pfIsolatedElectrons'+postfix).deltaBetaIsolationValueMap = cms.InputTag('elPFIsoValuePU03PFId'+postfix)
-    getattr(process,'pfIsolatedElectrons'+postfix).isolationValueMapsNeutral = cms.VInputTag(cms.InputTag('elPFIsoValueNeutral03PFId'+postfix), cms.InputTag('elPFIsoValueGamma03PFId'+postfix))
-    getattr(process,'pfIsolatedElectrons'+postfix).combinedIsolationCut = cms.double(9999.)
-    getattr(process,'pfIsolatedElectrons'+postfix).isolationCut = cms.double(9999.)
-
-    ## Electron ID
-    process.load("EGamma.EGammaAnalysisTools.electronIdMVAProducer_cfi")
-    process.eidMVASequence = cms.Sequence( process.mvaTrigV0 + process.mvaNonTrigV0 )
-
-    getattr(process,'patElectrons'+postfix).electronIDSources.mvaTrigV0    = cms.InputTag("mvaTrigV0")
-    getattr(process,'patElectrons'+postfix).electronIDSources.mvaNonTrigV0 = cms.InputTag("mvaNonTrigV0")
-    getattr(process,'patElectrons'+postfix).isolationValues = cms.PSet(
-        pfChargedHadrons = cms.InputTag('elPFIsoValueCharged03PFId'+postfix),
-        pfChargedAll = cms.InputTag('elPFIsoValueChargedAll03PFId'+postfix),
-        pfPUChargedHadrons = cms.InputTag('elPFIsoValuePU03PFId'+postfix),
-        pfNeutralHadrons = cms.InputTag('elPFIsoValueNeutral03PFId'+postfix),
-        pfPhotons = cms.InputTag('elPFIsoValueGamma03PFId'+postfix)
-    )
 
     ## Conversion rejection
     ## This should be your last selected electron collection name since currently index is used to match with electron later. We can fix this using reference pointer.

@@ -40,7 +40,7 @@
 #include "DataFormats/PatCandidates/interface/Jet.h"
 #include "DataFormats/PatCandidates/interface/Electron.h"
 #include "DataFormats/PatCandidates/interface/Muon.h"
-
+#include "DataFormats/Common/interface/TriggerResults.h"
 
 #include "PhysicsTools/SelectorUtils/interface/PFJetIDSelectionFunctor.h"
 #include "RecoEgamma/EgammaTools/interface/ConversionFinder.h"
@@ -135,5 +135,13 @@ class TTbarSelectionProducer : public edm::EDProducer {
       TH1F* hcheck_met_ee         ;
       TH1F* hcheck_met_emu        ;
       TH1F* hcheck_met_mumu       ;
-			  
+
+      edm::EDGetTokenT<edm::TriggerResults> triggerBits_;
+      edm::EDGetTokenT<pat::MuonCollection> muonToken_;
+      edm::EDGetTokenT<pat::ElectronCollection> electronToken_;
+      edm::EDGetTokenT<pat::JetCollection> jetToken_;
+      edm::EDGetTokenT<pat::METCollection> metToken_;
+      
+      //verbose level
+      int verbose_;
 };
