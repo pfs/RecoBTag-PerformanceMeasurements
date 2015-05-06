@@ -9,43 +9,55 @@ using namespace edm;
 
 TTbarSelectionProducer::TTbarSelectionProducer(const edm::ParameterSet& iConfig) :
   triggerBits_(consumes<edm::TriggerResults>(iConfig.getParameter<edm::InputTag>("triggerColl"))),
-  muonToken_(consumes<pat::MuonCollection>(iConfig.getParameter<edm::InputTag>("muonColl"))),
   electronToken_(consumes<pat::ElectronCollection>(iConfig.getParameter<edm::InputTag>("electronColl"))),
+  muonToken_(consumes<pat::MuonCollection>(iConfig.getParameter<edm::InputTag>("muonColl"))),
   jetToken_(consumes<pat::JetCollection>(iConfig.getParameter<edm::InputTag>("jetColl"))),
   metToken_(consumes<pat::METCollection>(iConfig.getParameter<edm::InputTag>("metColl")))  
 {
-   //register your products
-   isData_            = iConfig.getParameter<bool > ("isData");
-   verbose_           = iConfig.getParameter<int > ("verbose");
+  verbose_           = iConfig.getParameter<int > ("verbose");
+  
+  trigNamesToSel_     = iConfig.getParameter<std::vector<std::string> >("trigNamesToSel");
+  doTrigSel_          = iConfig.getParameter<bool>("doTrigSel");
 
-   //Configuration for electrons
-   electron_cut_pt_   = iConfig.getParameter<double>        ("electron_cut_pt");
-   electron_cut_eta_  = iConfig.getParameter<double>        ("electron_cut_eta");
-   electron_cut_iso_  = iConfig.getParameter<double>        ("electron_cut_iso");
+  //Configuration for electrons
+  electron_cut_pt_   = iConfig.getParameter<double>        ("electron_cut_pt");
+  electron_cut_eta_  = iConfig.getParameter<double>        ("electron_cut_eta");
+  electron_cut_iso_  = iConfig.getParameter<double>        ("electron_cut_iso");
+  
+  //Configuration for muons
+  muon_cut_pt_   = iConfig.getParameter<double>        ("muon_cut_pt");
+  muon_cut_eta_  = iConfig.getParameter<double>        ("muon_cut_eta");
+  muon_cut_iso_  = iConfig.getParameter<double>        ("muon_cut_iso");
+  
+  //Configuration for jets
+  jet_cut_pt_   = iConfig.getParameter<double>        ("jet_cut_pt");
+  jet_cut_eta_  = iConfig.getParameter<double>        ("jet_cut_eta");
+  
+  //Configuration for met
+  met_cut_   = iConfig.getParameter<double>        ("met_cut");
+  
+  //produce
+  produces<int>();
+  produces<float>();
+  produces<std::vector<pat::Electron> >();
+  produces<std::vector<pat::Muon> >();
+  produces<std::vector<pat::Jet> >();
+  
 
-   //Configuration for muons
-   muon_cut_pt_   = iConfig.getParameter<double>        ("muon_cut_pt");
-   muon_cut_eta_  = iConfig.getParameter<double>        ("muon_cut_eta");
-   muon_cut_iso_  = iConfig.getParameter<double>        ("muon_cut_iso");
-
-   //Configuration for jets
-   jet_cut_pt_   = iConfig.getParameter<double>        ("jet_cut_pt");
-   jet_cut_eta_  = iConfig.getParameter<double>        ("jet_cut_eta");
-
-   //Configuration for met
-   met_cut_   = iConfig.getParameter<double>        ("met_cut");
-
-   produces<int>();
-   produces<vector<double>>();
-
-   // some histograms
-   hcheck_cutflow        = fs->make<TH1F>("hcheck_cutflow","Selection level", 8, -0.5, 7.5);
-   hcheck_m_ee           = fs->make<TH1F>("hcheck_m_ee","M_{e e}",200,0.,1000);
-   hcheck_m_emu          = fs->make<TH1F>("hcheck_m_emu","M_{e #mu}",200,0.,1000);
-   hcheck_m_mumu         = fs->make<TH1F>("hcheck_m_mumu","M_{#mu #mu}",200,0.,1000);
-   hcheck_met_ee         = fs->make<TH1F>("hcheck_met_ee","MET (ee channel)", 100,0., 500);
-   hcheck_met_emu        = fs->make<TH1F>("hcheck_met_emu","MET (e #mu channel)", 100,0., 500);
-   hcheck_met_mumu       = fs->make<TH1F>("hcheck_met_mumu","MET (#mu #mu channel)", 100,0., 500);
+  // some histograms
+  edm::Service<TFileService> fs;
+  std::string ch[]={"inc","ee","mumu","emu","e","mu"};
+  for(size_t i=0; i<sizeof(ch)/sizeof(std::string); i++)
+    {
+      histos_["cutflow_"+ch[i]] = fs->make<TH1F>(("cutflow_"+ch[i]).c_str(),"Selection level", 4, 0, 4);
+      histos_["m_"+ch[i]]       = fs->make<TH1F>(("m_"+ch[i]).c_str(),      "Invariant mass [GeV]",200,0.,1000);
+      histos_["met_"+ch[i]]     = fs->make<TH1F>(("met_"+ch[i]).c_str(),    "Missing transverse energy [GeV]", 100,0., 500);
+      histos_["njets_"+ch[i]]   = fs->make<TH1F>(("njets_"+ch[i]).c_str(),  "Jet multiplicity",10,0.,10.);
+    }
+  for(std::map<std::string, TH1F *>::iterator it =histos_.begin();
+      it!=histos_.end();
+      it++)
+    it->second->Sumw2();
 }
 
 
@@ -71,41 +83,57 @@ TTbarSelectionProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSetu
    if(verbose_>5) std::cout << "in TTbarSelectionProducer::produce " << std::endl;
 
    //check trigger
+   int trigWord(0);
    edm::Handle<edm::TriggerResults> triggerBits;
    iEvent.getByToken(triggerBits_, triggerBits);
-   
+   bool changedConfig = false;
+   if (!hltConfig.init(iEvent.getRun(), iSetup, "HLT", changedConfig)) 
+     {
+       std::cout << "Initialization of HLTConfigProvider failed!!" << std::endl;
+       return;
+     }   
+   for (unsigned int i = 0, n = triggerBits->size(); i < n; ++i) 
+     {
+       if(!triggerBits->accept(i)) continue;
+       std::string trigName=hltConfig.triggerNames()[i];
+       int tctr(0);
+       for(std::vector<std::string>::iterator trigIt=trigNamesToSel_.begin();
+	   trigIt!=trigNamesToSel_.end();
+	   trigIt++, tctr++)
+	 {
+	   if(trigName.find(*trigIt)==std::string::npos) continue;
+	   trigWord |= (1<<tctr);
+	 }
+     }
+   if(verbose_>5) std::cout << "Trigger word is: " << trigWord << std::endl;
+
    
    //------------------------------------------
    //get beam spot
    //------------------------------------------
-   const reco::BeamSpot* bs = 0;
-   edm::Handle<reco::BeamSpot> recoBeamSpotHandle;
-   iEvent.getByLabel("offlineBeamSpot", recoBeamSpotHandle);
-   bs = recoBeamSpotHandle.product();
+   Handle<reco::BeamSpot> bsHandle;
+   iEvent.getByLabel("offlineBeamSpot", bsHandle);
+   const reco::BeamSpot &beamspot = *bsHandle.product();
    
    //------------------------------------------
    //Selection of muons
    //------------------------------------------
-
-   std::vector< TLorentzVector  > p4Muon;
-   std::vector< int  > chargeMuon;
    edm::Handle<pat::MuonCollection> muHa;
    iEvent.getByToken(muonToken_, muHa);
+   std::vector<pat::Muon> selMuons;
    for (const pat::Muon &mu : *muHa) 
      { 
-     
        bool passKin( mu.pt() > muon_cut_pt_  && fabs(mu.eta()) < muon_cut_eta_ );
        if(!passKin) continue;
 
        bool passID ( mu.isPFMuon() 
 		     && mu.isGlobalMuon() 
-		     && mu.isTrackerMuon()
 		     && mu.normChi2() < 10 
 		     && mu.innerTrack()->hitPattern().trackerLayersWithMeasurement() > 5 
 		     && mu.globalTrack()->hitPattern().numberOfValidMuonHits() > 0 
 		     && mu.innerTrack()->hitPattern().numberOfValidPixelHits() > 0 
 		     && mu.numberOfMatchedStations() > 1 
-		     && mu.innerTrack()->dxy(*bs) < 0.02
+		     && mu.innerTrack()->dxy(beamspot) < 0.02
 		     );
        if(!passID) continue;
 
@@ -116,26 +144,20 @@ TTbarSelectionProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSetu
        double relIso  = (TMath::Max(Float_t(nhIso+gIso-0.5*puchIso),Float_t(0.))+chIso)/mu.pt();
        bool passIso( relIso < muon_cut_iso_ );
        if(!passIso) continue;
-	       
-       TLorentzVector themuon;
-       themuon.SetPtEtaPhiM(mu.pt(), mu.eta(),  mu.phi(), 0.);
-       p4Muon.push_back(themuon);
-       chargeMuon.push_back(mu.charge());
+	      
+       selMuons.push_back(mu);
      }
-   if(verbose_>5) std::cout << "\t Selected  " << chargeMuon.size() << " muons" << std::endl;
+   if(verbose_>5) std::cout << "\t Selected  " << selMuons.size() << " muons" << std::endl;
 
 
    //------------------------------------------
    //Selection of electrons
    //------------------------------------------
-
-
-   std::vector< TLorentzVector  > p4Elec;
-   std::vector< int  > chargeElec;
    edm::Handle<pat::ElectronCollection> elHa;
    iEvent.getByToken(electronToken_, elHa);
+   std::vector<pat::Electron> selElectrons;
    for (const pat::Electron &el : *elHa) 
-     {    
+     {  
        double theta = 2*atan(exp(-1*el.superCluster()->eta()));
        double ET_SC = el.superCluster()->energy()*sin(theta);
        bool passKin( el.pt() > electron_cut_pt_  && fabs(el.eta()) < electron_cut_eta_ && ET_SC>15);
@@ -143,7 +165,7 @@ TTbarSelectionProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSetu
 
        bool passID( el.ecalDrivenSeed()
 		    && el.gsfTrack().isNonnull()
-		    && fabs(el.gsfTrack()->dxy(*bs)) < 0.04
+		    && fabs(el.gsfTrack()->dxy(beamspot)) < 0.04
 		    && ET_SC > 15 
 		    && el.passConversionVeto() 
 		    && el.gsfTrack()-> hitPattern().numberOfLostHits(reco::HitPattern::MISSING_INNER_HITS) <1);
@@ -163,14 +185,10 @@ TTbarSelectionProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSetu
        double relIso  = (TMath::Max(Float_t(nhIso+gIso-0.5*puchIso),Float_t(0.))+chIso)/el.pt();
        bool passIso( relIso < electron_cut_iso_ );
        if(!passIso) continue;
-	     
-       TLorentzVector theelectron;
-       theelectron.SetPtEtaPhiM(el.pt(), el.eta(),  el.phi(), 0.);
-       
-       p4Elec.push_back(theelectron);
-       chargeElec.push_back(el.charge());
+
+       selElectrons.push_back(el);
      }
-   if(verbose_>5) std::cout << "\t Selected " << chargeElec.size() << " electrons" << std::endl;
+   if(verbose_>5) std::cout << "\t Selected " << selElectrons.size() << " electrons" << std::endl;
    
    
    //------------------------------------------
@@ -178,152 +196,103 @@ TTbarSelectionProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSetu
    //------------------------------------------
    edm::Handle<pat::JetCollection> jetHa;
    iEvent.getByToken(jetToken_, jetHa);
-   std::vector< TLorentzVector  > p4Jet;
+   std::vector<pat::Jet> selJets;
    for (const pat::Jet &j : *jetHa) 
      {
        bool passKin( j.pt() > jet_cut_pt_  && fabs(j.eta()) < jet_cut_eta_ );
        if(!passKin) continue;
 	   
        // check overlap with electron and muon
-       TLorentzVector thejet;
-       thejet.SetPtEtaPhiM(j.pt(), j.eta(),  j.phi(), 0.);
-       double deltaRmu = 10000;
-       double deltaRel = 10000;
-       for(unsigned int imu=0; imu< p4Muon.size(); imu++)
+       float minDR(99999.);
+       for(size_t ilep=0; ilep<selMuons.size(); ilep++)
 	 {
-	   double deltaR = thejet.DeltaR(p4Muon[imu]);
-	   if(deltaR < deltaRmu) deltaRmu = deltaR;
+	   double dR = deltaR(j,selMuons[ilep]);
+	   if(dR < minDR) minDR=dR;
 	 }
-       for(unsigned int iel=0; iel< p4Elec.size(); iel++)
+       for(size_t ilep=0; ilep<selElectrons.size(); ilep++)
 	 {
-	   double deltaR = thejet.DeltaR(p4Elec[iel]);
-	   if(deltaR < deltaRel) deltaRel = deltaR;
+	   double dR = deltaR(j,selElectrons[ilep]);
+	   if(dR < minDR) minDR=dR;
 	 }
-       bool hasOverlap(deltaRmu<0.5 || deltaRel<0.5);
+       bool hasOverlap(minDR<0.4);
        if(!hasOverlap) continue;
-
        
-       p4Jet.push_back(thejet);
+       selJets.push_back(j);
      }
-   if(verbose_>5) std::cout << "\t Selected "<< p4Jet.size() << " jets" << std::endl;
+   if(verbose_>5) std::cout << "\t Selected "<< selJets.size() << " jets" << std::endl;
    
 
    edm::Handle<pat::METCollection> metHa;
    iEvent.getByToken(metToken_, metHa);
+   const pat::MET &met = metHa->front();
 
-   //std::cout << "get met : done " << std::endl;
-   int channel = -1;
-   int ind_cutflow=0;
-   std::vector< TLorentzVector  > TheLeptons;
-   double Mll_2 = -1;
-   double themet = -1.;
+   //assign channel
+   float mll(0);
+   int chsel=AssignChannel(selElectrons, selMuons, trigWord);
+   if(verbose_>5) cout << "\t Channel assigned after lepton selection " << chsel << endl;
 
-   bool passSel = false;
-   int nLeps(p4Elec.size()+p4Muon.size());
-   int nSelJets(p4Jet.size());
-   if (nLeps >=1) ind_cutflow++;
-   if( nLeps >=2){
-     ind_cutflow++;
-     int idxLept1 = -1;
-     int idxLept2 = -1;
-     //std::cout << " Lepton : " << p4Elec.size()+p4Muon.size() << std::endl;
-     GetLeptonPair(p4Elec, p4Muon, chargeElec, chargeMuon, idxLept1, idxLept2, channel);
-
-     if(channel >=0){
-
-       ind_cutflow++;
-       double Mll = -1;
-       if(channel == 0) Mll = (p4Elec[idxLept1]+p4Elec[idxLept2]).M();
-       if(channel == 1) Mll = (p4Muon[idxLept1]+p4Muon[idxLept2]).M();
-       if(channel == 2) Mll = (p4Elec[idxLept1]+p4Muon[idxLept2]).M();
-
-       if(channel == 0)  {
-         TheLeptons.push_back(p4Elec[idxLept1]);
-         TheLeptons.push_back(p4Elec[idxLept2]);
-       }
-       else if (channel == 1) {
-         TheLeptons.push_back(p4Muon[idxLept1]);
-         TheLeptons.push_back(p4Muon[idxLept2]);
-       }
-      else if (channel == 2) {
-	TheLeptons.push_back(p4Elec[idxLept1]);
-	TheLeptons.push_back(p4Muon[idxLept2]);
-      }
-       
-       Mll_2 = (TheLeptons[0]+TheLeptons[1]).M();
-       if (fabs(Mll_2-Mll)>0.01) std::cout << " Mll_2 " << Mll_2 << " Mll " << Mll << std::endl;
-          
-       const pat::MET    *met = 0;
-       met = &(metHa->front());
-       themet = met->pt();
-       
-       if( Mll > 20 && ( channel ==2 || ( channel <=1 && fabs(Mll-91)>15)) ) {
-	   ind_cutflow++;
-	   if (nSelJets >=2) {
-	     ind_cutflow++;
-	     if (themet >  met_cut_  ||  channel ==2) {
-	       passSel = true;
-	       ind_cutflow++;
-	       if (channel==0) {
-		 hcheck_m_ee->Fill(Mll)   ;
-		 hcheck_met_ee->Fill(themet) ;
-	       }
-	       else if (channel==1) {
-		 hcheck_m_mumu->Fill(Mll)   ;
-		 hcheck_met_mumu->Fill(themet) ;
-	       }
-	       else if (channel==2) {
-                 hcheck_m_emu->Fill(Mll)   ;
-                 hcheck_met_emu->Fill(themet) ;
-		 if(verbose_>5)
-		   {
-		     cout << "\t lepton 1 " << TheLeptons[0].Pt() << " " << TheLeptons[0].Eta() << endl
-			  << "\t lepton 2 " << TheLeptons[1].Pt() << " " << TheLeptons[1].Eta() << endl;
-		     for(unsigned int ij=0; ij< p4Jet.size(); ij++) {
-		       cout << "\t jet " << ij << "   " << p4Jet[ij].Pt() << " " << p4Jet[ij].Eta() << endl;
-		     }
-		   }
-	       }
-	     }
-	   }
-	 }
+   bool passLepSel(chsel!=0);
+   std::vector<std::string> tags(1,"inc");
+   if(abs(chsel)==11*11) 
+     {
+       tags.push_back("ee");
+       mll=(selElectrons[0].p4()+selElectrons[1].p4()).mass();
      }
-   }
-   
-
-   if(!passSel) channel = -1;
-   hcheck_cutflow->Fill(0)        ;
-   if (ind_cutflow>0) {
-     for (int ii=1; ii<=ind_cutflow; ii++) {
-       hcheck_cutflow->Fill(ii)        ;
+   if(abs(chsel)==11*13) 
+     {
+       tags.push_back("emu");
+       mll=(selElectrons[0].p4()+selMuons[0].p4()).mass();
      }
-   }
-   
-   std::auto_ptr<int > pOut( new int (channel) );
-   iEvent.put(pOut);
-   
-   vector<double> thelep_and_met;
-   if (channel>=0) {
-     thelep_and_met.push_back(TheLeptons[0].Pt());
-     thelep_and_met.push_back(TheLeptons[0].Eta());
-     thelep_and_met.push_back(TheLeptons[0].Phi());
-     thelep_and_met.push_back(TheLeptons[1].Pt());
-     thelep_and_met.push_back(TheLeptons[1].Eta());
-     thelep_and_met.push_back(TheLeptons[1].Phi());
-     thelep_and_met.push_back(themet);
-     thelep_and_met.push_back(Mll_2);
-   }
-   std::auto_ptr<std::vector<double>> pOut2 (new std::vector<double> (thelep_and_met) );
-   iEvent.put(pOut2);
-   /*
-     std::auto_ptr<std::vector<TLorentzVector>> pOut2 (new std::vector<TLorentzVector> (TheLeptons) );
-     iEvent.put(pOut2);
+   if(abs(chsel)==13*13)
+     {
+       tags.push_back("mumu");
+       mll=(selMuons[0].p4()+selMuons[1].p4()).mass();
+     }
+   if(abs(chsel)==13)    tags.push_back("mu");
+   if(abs(chsel)==11)    tags.push_back("e");
 
-     std::auto_ptr<double > pOut3( new double (themet) );
-     iEvent.put(pOut3);
-   */
+   //jet selection
+   bool passJetSel(false);
+   if((abs(chsel)==13 || abs(chsel)==11) && selJets.size()>=4) passJetSel=true;
+   if(abs(chsel)>13 && selJets.size()>=2)                      passJetSel=true;
+   if(verbose_>5) std::cout << "\t Pass jet selection-" << passJetSel << std::endl;
+
+   //MET selection
+   bool passMetSel(true);
+   if(abs(chsel)==11*11 || abs(chsel)==13*13) passMetSel=(met.pt()>met_cut_);
+   if(verbose_>5) std::cout << "\t Pass met selection-" << passMetSel << std::endl;
    
-   //std::cout << "print output : done " << std::endl;
+   //fill control histos
+   for(size_t i=0; i<tags.size(); i++)
+     {
+       histos_["cutflow_"+tags[i]]->Fill(0);
+       if(passLepSel                            ) histos_["cutflow_"+tags[i]]->Fill(1);
+       if(passLepSel && passJetSel              ) histos_["cutflow_"+tags[i]]->Fill(2);
+       if(passLepSel && passJetSel && passMetSel) histos_["cutflow_"+tags[i]]->Fill(3);
+       if(              passJetSel && passMetSel) histos_["m_"+tags[i]]->Fill(mll);
+       if(passLepSel && passJetSel              ) histos_["met_"+tags[i]]->Fill(mll);
+       if(passLepSel &&               passMetSel) histos_["njets_"+tags[i]]->Fill(selJets.size());
+     }
+
+   //save summary of selected objects into event
+   if(!passLepSel || !passJetSel || !passMetSel) 
+     {
+       chsel=0;
+       selElectrons.clear();
+       selMuons.clear();
+       selJets.clear();
+       if(verbose_>5) std::cout << "\t Event is *not* selected " << std::endl;
+     }
+   else if(verbose_>5) std::cout << "\t Event is selected " << std::endl;
+
+   std::auto_ptr<int > chOut( new int (chsel) );
+   iEvent.put(chOut);
+   auto_ptr<vector<pat::Electron> > eleColl( new vector<pat::Electron>(selElectrons) );
+   iEvent.put( eleColl );
+   auto_ptr<vector<pat::Muon> > muColl( new vector<pat::Muon>(selMuons) );
+   iEvent.put( muColl );
+   auto_ptr<vector<pat::Jet> > jetColl( new vector<pat::Jet>(selJets) );
+   iEvent.put( jetColl );
 }
 
 // ------------ method called once each job just before starting event loop  ------------
@@ -373,96 +342,71 @@ TTbarSelectionProducer::fillDescriptions(edm::ConfigurationDescriptions& descrip
 
 
 
-void
-TTbarSelectionProducer::GetLeptonPair(
-                          std::vector<TLorentzVector> elec_in, std::vector<TLorentzVector> muon_in,
-                          std::vector<int> elec_charge, std::vector<int> muon_charge,
-			  int &idxLept1, int &idxLept2, int &thechannel){
+int
+TTbarSelectionProducer::AssignChannel(std::vector<pat::Electron> &selElectrons,
+				      std::vector<pat::Muon> &selMuons,
+				      int trigWord)
+{
+  int chsel(0);
 
-
-  float sum_pT_ee = 0.;
-  bool pass_elec = false;
-  int ie1 = -1;
-  int ie2 = -1;
-  if (elec_in.size () >= 2) {
-    for (unsigned int i = 0; i < elec_in.size (); i++) {
-      for (unsigned int j = i + 1; j < elec_in.size (); j++) {
-	if (pass_elec)
-	  continue;
-	if ( elec_charge[i] != elec_charge[j] ){
-	  pass_elec = true;
-	  sum_pT_ee = elec_in[i].Pt () + elec_in[j].Pt ();
-	  ie1 = i;
-	  ie2 = j;
-	}
-      }
-    }
-  }
-
-  float sum_pT_mumu = 0.;
-  bool pass_muon = false;
-  int imu1 = -1;
-  int imu2 = -1;
-  if (muon_in.size () >= 2) {
-    for (unsigned int i = 0; i < muon_in.size (); i++) {
-      for (unsigned int j = i + 1; j < muon_in.size (); j++) {
-	if (pass_muon)
-	  continue;
-	if ( muon_charge[i] != muon_charge[j] ){
-	  pass_muon = true;
-	  sum_pT_mumu = muon_in[i].Pt () + muon_in[j].Pt ();
-	  imu1 = i;
-	  imu2 = j;
-	}
-      }
-    }
-  }
-
-
-  float sum_pT_emu_start = 0.;
-  float sum_pT_emu = 0.;
-  int je1 = -1;
-  int jmu2 = -1;
-  if (muon_in.size () >= 1 && elec_in.size () >= 1) {
-    for (unsigned int i = 0; i < muon_in.size (); i++) {
-      for (unsigned int j = 0; j < elec_in.size (); j++) {
-	if ( (muon_charge[i] != elec_charge[j]) ){
-	  sum_pT_emu = muon_in[i].Pt () + elec_in[j].Pt ();
-	  if (sum_pT_emu > sum_pT_emu_start) {
-	    sum_pT_emu_start = sum_pT_emu;
-	    je1 = j;
-	    jmu2 = i;
+  if(selMuons.size()==1 && selElectrons.size()==0) chsel=selMuons[0].charge()*(-13);
+  if(selMuons.size()==0 && selElectrons.size()==1) chsel=selElectrons[0].charge()*(-11);
+  if(selMuons.size()+selElectrons.size()>=2)
+    {
+      float sumPt_ee(0.);
+      int iee[2]={-1,-1};
+      for(size_t i=0; i<selElectrons.size(); i++)
+	for(size_t j=i+1; j<selElectrons.size(); j++)
+	  {
+	    float sumPt=selElectrons[i].pt()+selElectrons[j].pt();
+	    if(sumPt<sumPt_ee) continue;
+	    sumPt_ee=sumPt;
+	    iee[0]=i; iee[1]=j;
 	  }
+
+      float sumPt_mm(0.);
+      int imm[2]={-1,-1};
+      for(size_t i=0; i<selMuons.size(); i++)
+	for(size_t j=i+1; j<selMuons.size(); j++)
+	  {
+	    float sumPt=selMuons[i].pt()+selMuons[j].pt();
+	    if(sumPt<sumPt_mm) continue;
+	    sumPt_mm=sumPt;
+	    imm[0]=i; imm[1]=j;
+	  }
+
+      float sumPt_em(0.);
+      int iem[2]={-1,-1};
+      for(size_t i=0; i<selMuons.size(); i++)
+	for(size_t j=0; j<selElectrons.size(); j++)
+	  {
+	    float sumPt=selMuons[i].pt()+selElectrons[j].pt();
+	    if(sumPt<sumPt_em) continue;
+	    sumPt_em=sumPt;
+	    iem[0]=i; iem[1]=j;
+	  }
+
+      if(sumPt_em>=sumPt_ee && sumPt_em>=sumPt_mm)
+	{
+	  std::vector<pat::Muon> newSelMuons(1,selMuons[iem[0]]);             selMuons=newSelMuons;
+	  std::vector<pat::Electron> newSelElectrons(1,selElectrons[iem[1]]); selElectrons=newSelElectrons;
+	  chsel=selElectrons[0].charge()*(-11)*selMuons[0].charge()*(-13);
 	}
-      }
+      else if(sumPt_mm>=sumPt_ee && sumPt_mm>=sumPt_em)
+	{
+	  selElectrons.clear();
+	  std::vector<pat::Muon> newSelMuons(2); newSelMuons[0]=selMuons[imm[0]]; newSelMuons[1]=selMuons[imm[1]]; selMuons=newSelMuons;
+	  chsel=selMuons[0].charge()*(-13)*selMuons[1].charge()*(-13);
+	}
+      else if(sumPt_ee>=sumPt_mm && sumPt_ee>=sumPt_em)
+	{
+	  selMuons.clear();
+	  std::vector<pat::Electron> newSelElectrons(2); newSelElectrons[0]=selElectrons[iee[0]]; newSelElectrons[1]=selElectrons[iee[1]]; selElectrons=newSelElectrons;
+	  chsel=selElectrons[0].charge()*(-11)*selElectrons[1].charge()*(-11);
+	}
     }
-  }
-
-
-  float sum[3] = { sum_pT_ee, sum_pT_mumu, sum_pT_emu };
-  int sortedIndices[3];
-  TMath::Sort (3, sum, sortedIndices);
-  if (sortedIndices[0] == 0 && sum_pT_ee != 0.) {
-    idxLept1 = ie1;
-    idxLept2 = ie2;
-    thechannel = 0;
-  }
-  else if (sortedIndices[0] == 1 && sum_pT_mumu != 0.) {
-    idxLept1 = imu1;
-    idxLept2 = imu2;
-    thechannel = 1;
-  }
-  else if (sortedIndices[0] == 2 && sum_pT_emu != 0.) {
-    idxLept1 = je1;
-    idxLept2 = jmu2;
-    thechannel = 2;
-  }
-
-
-
-
-
-
+  
+  return chsel;
 }
 
 
