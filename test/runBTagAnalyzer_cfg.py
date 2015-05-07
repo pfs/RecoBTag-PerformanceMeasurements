@@ -659,7 +659,6 @@ if options.useTTbarFilter:
     process.load("RecoBTag.PerformanceMeasurements.TTbarSelectionFilter_cfi")
     process.load("RecoBTag.PerformanceMeasurements.TTbarSelectionProducer_cfi")
 
-    process.ttbarselectionproducer.isData       = options.runOnData
     if options.miniAOD:
         process.ttbarselectionproducer.electronColl = cms.InputTag('slimmedElectrons')
         process.ttbarselectionproducer.muonColl     = cms.InputTag('slimmedMuons')
@@ -709,11 +708,6 @@ if options.useTTbarFilter:
         ## Electron ID
         process.load("EGamma.EGammaAnalysisTools.electronIdMVAProducer_cfi")
         process.eidMVASequence = cms.Sequence( process.mvaTrigV0 + process.mvaNonTrigV0 )
-
-    process.ttbarselectionfilter.select_ee   = True
-    process.ttbarselectionfilter.select_mumu = True
-    process.ttbarselectionfilter.select_emu  = True
-    process.ttbarselectionfilter.Keep_all_events  = False
 
 
 

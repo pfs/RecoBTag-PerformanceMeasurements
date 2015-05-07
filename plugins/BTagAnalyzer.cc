@@ -1126,9 +1126,18 @@ void BTagAnalyzerT<IPTI,VTX>::analyze(const edm::Event& iEvent, const edm::Event
     edm::Handle<int> pIn;
     iEvent.getByLabel(channel_, pIn);
     EventInfo.ttbar_chan=*pIn;
-    edm::Handle<vector< double  >> pIn2;
-    iEvent.getByLabel(channel_, pIn2);
-    if (pIn2->size()==8) {
+    /*
+      chsel
+      nl_
+      lepton[].{pt,eta,phi,mass,genid}
+      met
+      nw
+      weights[]
+
+      FIXME TO STORE TTBAR EVENT SUMMARY
+      edm::Handle<vector< double  >> pIn2;
+      iEvent.getByLabel(channel_, pIn2);
+      if (pIn2->size()==8) {
       EventInfo.lepton1_pT=(*pIn2)[0];
       EventInfo.lepton1_eta=(*pIn2)[1];
       EventInfo.lepton1_phi=(*pIn2)[2];
@@ -1137,8 +1146,8 @@ void BTagAnalyzerT<IPTI,VTX>::analyze(const edm::Event& iEvent, const edm::Event
       EventInfo.lepton2_phi=(*pIn2)[5];
       EventInfo.met=(*pIn2)[6];
       EventInfo.mll=(*pIn2)[7];
-    }
-    else {
+      }
+      else {
       EventInfo.lepton1_pT=-1;
       EventInfo.lepton1_eta=-1;
       EventInfo.lepton1_phi=-1;
@@ -1147,7 +1156,8 @@ void BTagAnalyzerT<IPTI,VTX>::analyze(const edm::Event& iEvent, const edm::Event
       EventInfo.lepton2_phi=-1;
       EventInfo.met=-1;
       EventInfo.mll=-1;
-    }
+      }
+    */
   }
 
   //------------------------------------------------------
