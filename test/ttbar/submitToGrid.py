@@ -24,7 +24,7 @@ def submitProduction(tag,dataset,isData,cfg,workDir,submit=False):
     else          : config_file.write('config.JobType.outputFiles = ["JetTree_data.root"]\n')
     config_file.write('\n')
     config_file.write('config.section_("Data")\n')
-    config_file.write('config.Data.inputDataset = '+dataset+'\n')
+    config_file.write('config.Data.inputDataset = "%s"\n' % dataset)
     config_file.write('config.Data.inputDBS = "global"\n')
     config_file.write('config.Data.splitting = "FileBased"\n')
     config_file.write('config.Data.unitsPerJob = 10\n')

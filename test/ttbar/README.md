@@ -22,8 +22,9 @@ Will run locally the analyzer for testing purposes
 ```
 python submitToGrid.py -j ttbar_phys14.json -c ../runBTagAnalyzer_cfg.py -s
 ```
-Will submit the samples described in the json to the grid
-```
+Will submit the samples described in the json to the grid.
+Don't forget to init the environment for crab3
+(e.g. https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookCRAB3Tutorial)
 
 ### KIN method
 

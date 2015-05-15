@@ -1,7 +1,7 @@
 import FWCore.ParameterSet.Config as cms
 
 ttbarselectionproducer = cms.EDProducer("TTbarSelectionProducer",
-                                        verbose          = cms.int32(6),
+                                        verbose          = cms.int32(0),
                                         triggerColl      = cms.InputTag("TriggerResults","","HLT"),
                                         trigNamesToSel   = cms.vstring(),
                                         doTrigSel        = cms.bool(False),
