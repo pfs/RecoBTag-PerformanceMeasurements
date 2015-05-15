@@ -9,6 +9,8 @@
   <use name="DataFormats/TrackReco"/>
   <use name="DataFormats/JetReco"/>
   <use name="DataFormats/MuonReco"/>
+  <use name="DataFormats/EgammaCandidates"/>
+  <use name="RecoEgamma/EgammaTools"/>
   <use name="JetMETCorrections/Objects"/>
   <use name="RecoMuon/TrackingTools"/>
   <use name="TrackingTools/TransientTrack"/>

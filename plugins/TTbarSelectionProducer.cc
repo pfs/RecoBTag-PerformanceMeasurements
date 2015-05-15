@@ -1,4 +1,4 @@
-
+#include "DataFormats/MuonReco/interface/MuonSelectors.h"
 
 #include "RecoBTag/PerformanceMeasurements/interface/TTbarSelectionProducer.h"
 
@@ -9,7 +9,9 @@ using namespace edm;
 
 TTbarSelectionProducer::TTbarSelectionProducer(const edm::ParameterSet& iConfig) :
   triggerBits_(consumes<edm::TriggerResults>(iConfig.getParameter<edm::InputTag>("triggerColl"))),
-  electronToken_(consumes<pat::ElectronCollection>(iConfig.getParameter<edm::InputTag>("electronColl"))),
+  electronToken_(consumes<edm::View<pat::Electron> >(iConfig.getParameter<edm::InputTag>("electronColl"))),
+  conversionsToken_(mayConsume< reco::ConversionCollection >(iConfig.getParameter<edm::InputTag>("conversions"))),
+  electronIdMapToken_(consumes<edm::ValueMap<bool> >(iConfig.getParameter<edm::InputTag>("electronIdMap"))),
   muonToken_(consumes<pat::MuonCollection>(iConfig.getParameter<edm::InputTag>("muonColl"))),
   jetToken_(consumes<pat::JetCollection>(iConfig.getParameter<edm::InputTag>("jetColl"))),
   metToken_(consumes<pat::METCollection>(iConfig.getParameter<edm::InputTag>("metColl")))  
@@ -126,15 +128,15 @@ TTbarSelectionProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSetu
        bool passKin( mu.pt() > muon_cut_pt_  && fabs(mu.eta()) < muon_cut_eta_ );
        if(!passKin) continue;
 
-       bool passID ( mu.isPFMuon() 
-		     && mu.isGlobalMuon() 
-		     && mu.normChi2() < 10 
-		     && mu.innerTrack()->hitPattern().trackerLayersWithMeasurement() > 5 
-		     && mu.globalTrack()->hitPattern().numberOfValidMuonHits() > 0 
-		     && mu.innerTrack()->hitPattern().numberOfValidPixelHits() > 0 
-		     && mu.numberOfMatchedStations() > 1 
-		     && mu.innerTrack()->dxy(beamspot) < 0.02
-		     );
+       //cf. https://twiki.cern.ch/twiki/bin/view/CMS/SWGuideMuonId2015
+       bool goodGlobalMuon(mu.isGlobalMuon() && 
+			   mu.globalTrack()->normalizedChi2() < 3 && 
+			   mu.combinedQuality().chi2LocalPosition < 12 && 
+			   mu.combinedQuality().trkKink < 20); 
+       bool isMedium (muon::isLooseMuon(mu) && 
+                      mu.innerTrack()->validFraction() > 0.8 && 
+                      muon::segmentCompatibility(mu) > (goodGlobalMuon ? 0.303 : 0.451)); 
+       bool passID (goodGlobalMuon && isMedium);
        if(!passID) continue;
 
        double nhIso   = mu.neutralHadronIso();
@@ -153,40 +155,32 @@ TTbarSelectionProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSetu
    //------------------------------------------
    //Selection of electrons
    //------------------------------------------
-   edm::Handle<pat::ElectronCollection> elHa;
+   edm::Handle<edm::View<pat::Electron> > elHa;
    iEvent.getByToken(electronToken_, elHa);
    std::vector<pat::Electron> selElectrons;
-   for (const pat::Electron &el : *elHa) 
-     {  
-       double theta = 2*atan(exp(-1*el.superCluster()->eta()));
-       double ET_SC = el.superCluster()->energy()*sin(theta);
-       bool passKin( el.pt() > electron_cut_pt_  && fabs(el.eta()) < electron_cut_eta_ && ET_SC>15);
+   edm::Handle<reco::ConversionCollection> convHa;
+   iEvent.getByToken(conversionsToken_, convHa);
+   edm::Handle<edm::ValueMap<bool> > eIDHa;
+   iEvent.getByToken(electronIdMapToken_ ,eIDHa);
+   for (size_t i = 0; i < elHa->size(); ++i)
+     {
+       const auto el = elHa->ptrAt(i);
+
+       bool passKin(el->pt() > electron_cut_pt_ && 
+		    fabs(el->superCluster()->eta()) < electron_cut_eta_ && 
+		    (el->isEB() || el->isEE()));
        if(!passKin) continue;
 
-       bool passID( el.ecalDrivenSeed()
-		    && el.gsfTrack().isNonnull()
-		    && fabs(el.gsfTrack()->dxy(beamspot)) < 0.04
-		    && ET_SC > 15 
-		    && el.passConversionVeto() 
-		    && el.gsfTrack()-> hitPattern().numberOfLostHits(reco::HitPattern::MISSING_INNER_HITS) <1);
+       // Conversion rejection
+       bool passConvVeto = !ConversionTools::hasMatchedConversion(*el,convHa,beamspot.position());
 
-       const std::vector< std::pair<std::string,float> > patids  = el.electronIDs();
-       for (unsigned int i=0;i<patids.size();i++)
-	 {
-	   if(patids[i].first != "mvaTrigV0") continue;
-	   passID &= (patids[i].second > 0.5 );
-	 }
+       //cut-based electron id+iso
+       //cf. https://twiki.cern.ch/twiki/bin/viewauth/CMS/CutBasedElectronIdentificationRun2
+       bool passElectronID = (*eIDHa)[el];
+       bool passID( passConvVeto && passElectronID);
        if(!passID) continue;
 
-       double nhIso   = el.neutralHadronIso();
-       double puchIso = el.puChargedHadronIso();
-       double chIso   = el.chargedHadronIso() ;
-       double gIso    = el.photonIso() ;
-       double relIso  = (TMath::Max(Float_t(nhIso+gIso-0.5*puchIso),Float_t(0.))+chIso)/el.pt();
-       bool passIso( relIso < electron_cut_iso_ );
-       if(!passIso) continue;
-
-       selElectrons.push_back(el);
+       selElectrons.push_back(*el);
      }
    if(verbose_>5) std::cout << "\t Selected " << selElectrons.size() << " electrons" << std::endl;
    

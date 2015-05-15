@@ -1,6 +1,3 @@
-
-
-
 // -*- C++ -*-
 //
 // Package:    TTbarSelectionProducer
@@ -42,6 +39,11 @@
 #include "DataFormats/PatCandidates/interface/Electron.h"
 #include "DataFormats/PatCandidates/interface/Muon.h"
 #include "DataFormats/Common/interface/TriggerResults.h"
+
+#include "DataFormats/Common/interface/ValueMap.h"
+#include "DataFormats/EgammaCandidates/interface/ConversionFwd.h"
+#include "DataFormats/EgammaCandidates/interface/Conversion.h"
+#include "RecoEgamma/EgammaTools/interface/ConversionTools.h"
 
 #include "PhysicsTools/SelectorUtils/interface/PFJetIDSelectionFunctor.h"
 #include "RecoEgamma/EgammaTools/interface/ConversionFinder.h"
@@ -91,8 +93,10 @@ class TTbarSelectionProducer : public edm::EDProducer {
       bool doTrigSel_;
 
       //Configuration for electrons      
-      edm::EDGetTokenT<pat::ElectronCollection> electronToken_;
+      edm::EDGetTokenT<edm::View<pat::Electron> > electronToken_;
       edm::InputTag electronColl_;
+      edm::EDGetTokenT<reco::ConversionCollection> conversionsToken_;
+      edm::EDGetTokenT<edm::ValueMap<bool> > electronIdMapToken_;
       double electron_cut_pt_ ; 
       double electron_cut_eta_;
       double electron_cut_iso_;
