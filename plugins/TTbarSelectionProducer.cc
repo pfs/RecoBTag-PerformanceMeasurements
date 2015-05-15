@@ -329,8 +329,9 @@ TTbarSelectionProducer::beginRun(edm::Run &iRun, edm::EventSetup const &es)
 	for (unsigned int iLine = 0; iLine<lines.size(); iLine++) 
 	  histos_[tag]->GetXaxis()->SetBinLabel(iLine+1,lines.at(iLine).c_str());  
       }
-    catch(...){
-    }
+  }
+  catch(...){
+  }  
 }
 
 // ------------ method called when ending the processing of a run  ------------
