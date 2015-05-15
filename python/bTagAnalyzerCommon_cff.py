@@ -30,7 +30,8 @@ bTagAnalyzerCommon = cms.PSet(
     maxDeltaR                = cms.double(0.4),
     explicitJTA              = cms.bool(False),
     use_ttbar_filter         = cms.bool(False),
-    channel                  = cms.InputTag("ttbarselectionproducer"),
+    ttbarproducer            = cms.InputTag("ttbarselectionproducer"),
+    rho                      = cms.InputTag("fixedGridRhoFastjetAll"),
     TriggerPathNames = cms.vstring(
         "HLT_Jet15U*",
         "HLT_Jet30_v*",

@@ -39,6 +39,7 @@
 #include "SimTracker/Records/interface/TrackAssociatorRecord.h"
 #include "SimDataFormats/TrackingAnalysis/interface/TrackingParticle.h"
 
+#include "SimDataFormats/GeneratorProducts/interface/LHEEventProduct.h"
 #include "SimDataFormats/GeneratorProducts/interface/GenEventInfoProduct.h"
 #include "RecoBTag/PerformanceMeasurements/interface/CategoryFinder.h"
 
@@ -87,6 +88,8 @@
 #include "DataFormats/JetReco/interface/GenJetCollection.h"
 #include "DataFormats/PatCandidates/interface/Jet.h"
 #include "DataFormats/PatCandidates/interface/Muon.h"
+#include "DataFormats/PatCandidates/interface/Electron.h"
+#include "DataFormats/PatCandidates/interface/MET.h"
 
 // reconstruct IP
 #include "TrackingTools/IPTools/interface/IPTools.h"
@@ -320,11 +323,14 @@ private:
   bool producePtRelTemplate_;
   
   bool use_ttbar_filter_;
-  edm::InputTag channel_;
+  edm::InputTag ttbarproducer_; 
   
   // trigger list
   std::vector<std::string> triggerPathNames_;
  
+  //rho
+  edm::InputTag rhoTag_;
+
   TrackClassifier classifier_;
   
   edm::Service<TFileService> fs;
@@ -351,16 +357,12 @@ private:
   //// Jet info
   JetInfoBranches JetInfo[MAX_JETCOLLECTIONS] ;
   BookHistograms* Histos[MAX_JETCOLLECTIONS] ;
-  
-  std::vector<std::string> ttbarTriggerPathNames_;
-  
+    
   const  reco::Vertex  *pv;
   
   bool PFJet80 ;
   std::vector<std::string> PFJet80TriggerPathNames_;
   
-  TLorentzVector thelepton1;
-  TLorentzVector thelepton2;
 
   const GenericMVAJetTagComputer *computer ;
   
@@ -388,8 +390,6 @@ BTagAnalyzerT<IPTI,VTX>::BTagAnalyzerT(const edm::ParameterSet& iConfig):
   classifier_(iConfig, consumesCollector()) ,
   pv(0),
   PFJet80(0),
-  thelepton1(0.,0.,0.,0.),
-  thelepton2(0.,0.,0.,0.),
   computer(0),
   cap0(0),
   cap1(0),
@@ -437,7 +437,8 @@ BTagAnalyzerT<IPTI,VTX>::BTagAnalyzerT(const edm::ParameterSet& iConfig):
   producePtRelTemplate_ = iConfig.getParameter<bool> ("producePtRelTemplate");
 
   use_ttbar_filter_     = iConfig.getParameter<bool> ("use_ttbar_filter");
-  channel_              = iConfig.getParameter<edm::InputTag> ("channel");
+  ttbarproducer_        = iConfig.getParameter<edm::InputTag> ("ttbarproducer");
+  rhoTag_               = iConfig.getParameter<edm::InputTag> ("rho");
 
   // Modules
   primaryVertexColl_   = iConfig.getParameter<edm::InputTag>("primaryVertexColl");
@@ -501,7 +502,6 @@ BTagAnalyzerT<IPTI,VTX>::BTagAnalyzerT(const edm::ParameterSet& iConfig):
   SVComputerFatJets_        = iConfig.getParameter<std::string>("svComputerFatJets");
 
   triggerPathNames_        = iConfig.getParameter<std::vector<std::string> >("TriggerPathNames");
-  ttbarTriggerPathNames_   = iConfig.getParameter<std::vector<std::string> >("TTbarTriggerPathNames");
   PFJet80TriggerPathNames_ = iConfig.getParameter<std::vector<std::string> >("PFJet80TriggerPathNames");
 
   ///////////////
@@ -1123,41 +1123,71 @@ void BTagAnalyzerT<IPTI,VTX>::analyze(const edm::Event& iEvent, const edm::Event
   // ttbar information
   //------------------------------------------------------
   if (use_ttbar_filter_) {
-    edm::Handle<int> pIn;
-    iEvent.getByLabel(channel_, pIn);
-    EventInfo.ttbar_chan=*pIn;
-    /*
-      chsel
-      nl_
-      lepton[].{pt,eta,phi,mass,genid}
-      met
-      nw
-      weights[]
 
-      FIXME TO STORE TTBAR EVENT SUMMARY
-      edm::Handle<vector< double  >> pIn2;
-      iEvent.getByLabel(channel_, pIn2);
-      if (pIn2->size()==8) {
-      EventInfo.lepton1_pT=(*pIn2)[0];
-      EventInfo.lepton1_eta=(*pIn2)[1];
-      EventInfo.lepton1_phi=(*pIn2)[2];
-      EventInfo.lepton2_pT=(*pIn2)[3];
-      EventInfo.lepton2_eta=(*pIn2)[4];
-      EventInfo.lepton2_phi=(*pIn2)[5];
-      EventInfo.met=(*pIn2)[6];
-      EventInfo.mll=(*pIn2)[7];
+    edm::Handle<int> pIn;
+    iEvent.getByLabel(ttbarproducer_, pIn);
+    EventInfo.ttbar_chan=*pIn;
+
+    int lctr(0);
+    edm::Handle<edm::View<pat::Electron> > selElectrons;
+    iEvent.getByLabel(ttbarproducer_,selElectrons);
+    for (size_t i = 0; i < selElectrons->size(); ++i)
+      {
+	const auto l = selElectrons->ptrAt(i);
+	EventInfo.ttbar_lpt[lctr]  = l->pt();
+	EventInfo.ttbar_leta[lctr] = l->eta();
+	EventInfo.ttbar_lphi[lctr] = l->phi();
+	EventInfo.ttbar_lm[lctr]   = 0;
+	EventInfo.ttbar_lch[lctr]  = l->charge();
+	EventInfo.ttbar_lid[lctr]  = 11;
+	EventInfo.ttbar_lgid[lctr] = l->genParticle() ? l->genParticle()->pdgId() : 0;
+	lctr++;
       }
-      else {
-      EventInfo.lepton1_pT=-1;
-      EventInfo.lepton1_eta=-1;
-      EventInfo.lepton1_phi=-1;
-      EventInfo.lepton2_pT=-1;
-      EventInfo.lepton2_eta=-1;
-      EventInfo.lepton2_phi=-1;
-      EventInfo.met=-1;
-      EventInfo.mll=-1;
+
+    edm::Handle<edm::View<pat::Muon> > selMuons;
+    iEvent.getByLabel(ttbarproducer_,selMuons);
+    for (size_t i = 0; i < selMuons->size(); ++i)
+      {
+	const auto l = selMuons->ptrAt(i);
+	EventInfo.ttbar_lpt[lctr]  = l->pt();
+	EventInfo.ttbar_leta[lctr] = l->eta();
+	EventInfo.ttbar_lphi[lctr] = l->phi();
+	EventInfo.ttbar_lm[lctr]   = 0;
+	EventInfo.ttbar_lch[lctr]  = l->charge();
+	EventInfo.ttbar_lid[lctr]  = 11;
+	EventInfo.ttbar_lgid[lctr] = l->genParticle() ? l->genParticle()->pdgId() : 0;
+	lctr++;
       }
-    */
+    EventInfo.ttbar_nl=lctr;
+
+    edm::Handle<edm::View<pat::MET> > selMETs;
+    iEvent.getByLabel(ttbarproducer_,selMETs);
+    EventInfo.ttbar_metpt=selMETs->ptrAt(0)->pt();
+    EventInfo.ttbar_metphi=selMETs->ptrAt(0)->phi();
+
+    edm::Handle< double > rhoH;
+    iEvent.getByLabel(rhoTag_,rhoH);
+    EventInfo.ttbar_rho = *rhoH;
+
+    //generator information
+    EventInfo.ttbar_nw=0;
+    if(!isData_)
+      {
+	try{
+	  edm::Handle<LHEEventProduct> evet;
+	  iEvent.getByLabel("externalLHEProducer","", evet);
+	  edm::Handle<GenEventInfoProduct> evt;
+	  iEvent.getByLabel("generator","", evt);
+	  const std::vector< double > w = evt->weights();
+	  for(unsigned int i=0; i<evet->weights().size();i++){
+	    double asdd=evet->originalXWGTUP();
+	    double asdde=evet->weights()[i].wgt;
+	    EventInfo.ttbar_w[EventInfo.ttbar_nw]=evt->weight()*asdde/asdd;
+	    EventInfo.ttbar_nw++;
+	  }
+	}catch(...){
+	}
+      }
   }
 
   //------------------------------------------------------
@@ -1256,7 +1286,6 @@ void BTagAnalyzerT<IPTI,VTX>::analyze(const edm::Event& iEvent, const edm::Event
 
   EventInfo.nBitTrigger = int(triggerPathNames_.size()/32)+1;
   for(int i=0; i<EventInfo.nBitTrigger; ++i) EventInfo.BitTrigger[i] = 0;
-  if (use_ttbar_filter_) EventInfo.trig_ttbar = 0;
 
   std::vector<std::string> triggerList;
   edm::Service<edm::service::TriggerNamesService> tns;
@@ -1286,11 +1315,6 @@ void BTagAnalyzerT<IPTI,VTX>::analyze(const edm::Event& iEvent, const edm::Event
 
   computer = dynamic_cast<const GenericMVAJetTagComputer*>( computerHandle.product() );
   //------------- end added-----------------------------------------------------------//
-
-  if (use_ttbar_filter_) {
-    thelepton1.SetPtEtaPhiM(EventInfo.lepton1_pT, EventInfo.lepton1_eta, EventInfo.lepton1_phi, 0.);
-    thelepton2.SetPtEtaPhiM(EventInfo.lepton2_pT, EventInfo.lepton2_eta, EventInfo.lepton2_phi, 0.);
-  }
 
   //------------------------------------------------------
   // All tracks info
@@ -1377,15 +1401,6 @@ void BTagAnalyzerT<IPTI,VTX>::processTrig(const edm::Handle<edm::TriggerResults>
       int bitIdx = int(triggerIdx/32);
       if ( NameCompatible(*itTrigPathNames,triggerList[i]) ) EventInfo.BitTrigger[bitIdx] |= ( 1 << (triggerIdx - bitIdx*32) );
     }
-
-    if (use_ttbar_filter_)
-    {
-      for (std::vector<std::string>::const_iterator itTrigPathNames = ttbarTriggerPathNames_.begin();
-          itTrigPathNames != ttbarTriggerPathNames_.end(); ++itTrigPathNames)
-      {
-        if ( NameCompatible(*itTrigPathNames,triggerList[i]) ) EventInfo.trig_ttbar |= ( 1 << ( itTrigPathNames - ttbarTriggerPathNames_.begin() ) );
-      }
-    } //// if use_ttbar_filter_
   } //// Loop over trigger names
 
   return;
@@ -1424,11 +1439,22 @@ void BTagAnalyzerT<IPTI,VTX>::processJets(const edm::Handle<PatJetCollection>& j
 
     //// overlap removal with lepton from ttbar selection
     if (use_ttbar_filter_) {
+
+      float minDRlj(9999.);
       TLorentzVector thejet;
-      thejet.SetPtEtaPhiM(ptjet, etajet, phijet, 0.);
-      double deltaR1 = thejet.DeltaR(thelepton1);
-      double deltaR2 = thejet.DeltaR(thelepton2);
-      if (EventInfo.ttbar_chan>=0 && (deltaR1 < 0.5 || deltaR2 < 0.5)) continue;
+      thejet.SetPtEtaPhiM(ptjet, etajet, phijet, 0.);      
+      for(int il=0; il<EventInfo.ttbar_nl; il++)
+	{
+	  TLorentzVector theLepton;
+	  theLepton.SetPtEtaPhiM(EventInfo.ttbar_lpt[il],
+				 EventInfo.ttbar_leta[il],
+				 EventInfo.ttbar_lphi[il],
+				 EventInfo.ttbar_lm[il]);
+	  float dR(thejet.DeltaR(theLepton));
+	  if(dR>minDRlj) continue;
+	  minDRlj=dR;
+	}
+      if(EventInfo.ttbar_chan>=0 && minDRlj<0.4) continue;
     }
     //// end of removal
 
@@ -1438,6 +1464,8 @@ void BTagAnalyzerT<IPTI,VTX>::processJets(const edm::Handle<PatJetCollection>& j
       if ( flavour >= 1 && flavour <= 3 ) flavour = 1;
     }
 
+    JetInfo[iJetColl].Jet_partonid[JetInfo[iJetColl].nJet]  = pjet->genParton() ? pjet->genParton()->pdgId() : 0;
+    JetInfo[iJetColl].Jet_area[JetInfo[iJetColl].nJet]      = pjet->jetArea();
     JetInfo[iJetColl].Jet_flavour[JetInfo[iJetColl].nJet]   = pjet->partonFlavour();
     JetInfo[iJetColl].Jet_nbHadrons[JetInfo[iJetColl].nJet] = pjet->jetFlavourInfo().getbHadrons().size();
     JetInfo[iJetColl].Jet_ncHadrons[JetInfo[iJetColl].nJet] = pjet->jetFlavourInfo().getcHadrons().size();

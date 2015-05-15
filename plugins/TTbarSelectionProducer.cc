@@ -1,5 +1,7 @@
 #include "DataFormats/MuonReco/interface/MuonSelectors.h"
 
+#include "SimDataFormats/GeneratorProducts/interface/LHERunInfoProduct.h" 
+
 #include "RecoBTag/PerformanceMeasurements/interface/TTbarSelectionProducer.h"
 
 using namespace std;
@@ -40,10 +42,10 @@ TTbarSelectionProducer::TTbarSelectionProducer(const edm::ParameterSet& iConfig)
   
   //produce
   produces<int>();
-  produces<float>();
   produces<std::vector<pat::Electron> >();
   produces<std::vector<pat::Muon> >();
   produces<std::vector<pat::Jet> >();
+  produces<std::vector<pat::MET> >();
   
 
   // some histograms
@@ -219,6 +221,7 @@ TTbarSelectionProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSetu
    edm::Handle<pat::METCollection> metHa;
    iEvent.getByToken(metToken_, metHa);
    const pat::MET &met = metHa->front();
+   std::vector<pat::MET> selMETs(1,met);
 
    //assign channel
    float mll(0);
@@ -275,6 +278,7 @@ TTbarSelectionProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSetu
        selElectrons.clear();
        selMuons.clear();
        selJets.clear();
+       selMETs.clear();
        if(verbose_>5) std::cout << "\t Event is *not* selected " << std::endl;
      }
    else if(verbose_>5) std::cout << "\t Event is selected " << std::endl;
@@ -287,6 +291,8 @@ TTbarSelectionProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSetu
    iEvent.put( muColl );
    auto_ptr<vector<pat::Jet> > jetColl( new vector<pat::Jet>(selJets) );
    iEvent.put( jetColl );
+   auto_ptr<vector<pat::MET> > metColl( new vector<pat::MET>(selMETs) );
+   iEvent.put( metColl );
 }
 
 // ------------ method called once each job just before starting event loop  ------------
@@ -302,8 +308,29 @@ TTbarSelectionProducer::endJob() {
 
 // ------------ method called when starting to processes a run  ------------
 void
-TTbarSelectionProducer::beginRun(edm::Run&, edm::EventSetup const&)
+TTbarSelectionProducer::beginRun(edm::Run &iRun, edm::EventSetup const &es)
 {
+  try{
+    edm::Service<TFileService> fs;
+    
+    edm::Handle<LHERunInfoProduct> lheruninfo;
+    typedef std::vector<LHERunInfoProduct::Header>::const_iterator headers_const_iterator;
+    iRun.getByLabel( "externalLHEProducer", lheruninfo );
+    
+    LHERunInfoProduct myLHERunInfoProduct = *(lheruninfo.product());
+    for (headers_const_iterator iter=myLHERunInfoProduct.headers_begin(); 
+	 iter!=myLHERunInfoProduct.headers_end(); 
+	 iter++)
+      {
+	std::vector<std::string> lines = iter->lines();
+	std::string tag(iter->tag());
+	if(histos_.find(tag)==histos_.end())
+	  histos_[tag]=fs->make<TH1F>(tag.c_str(),tag.c_str(),lines.size(),0,lines.size());
+	for (unsigned int iLine = 0; iLine<lines.size(); iLine++) 
+	  histos_[tag]->GetXaxis()->SetBinLabel(iLine+1,lines.at(iLine).c_str());  
+      }
+    catch(...){
+    }
 }
 
 // ------------ method called when ending the processing of a run  ------------
