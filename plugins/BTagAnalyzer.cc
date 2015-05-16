@@ -1454,7 +1454,7 @@ void BTagAnalyzerT<IPTI,VTX>::processJets(const edm::Handle<PatJetCollection>& j
 	    if(dR>minDRlj) continue;
 	    minDRlj=dR;
 	  }
-	if(EventInfo.ttbar_chan>=0 && minDRlj<0.4) continue;
+	if(EventInfo.ttbar_chan!=0 && minDRlj<0.4) continue;
       }
     //// end of removal
 
