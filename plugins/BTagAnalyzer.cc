@@ -1438,24 +1438,24 @@ void BTagAnalyzerT<IPTI,VTX>::processJets(const edm::Handle<PatJetCollection>& j
     if ( allowJetSkipping_ && ( ptjet < minJetPt_ || std::fabs( etajet ) > maxJetEta_ ) ) continue;
 
     //// overlap removal with lepton from ttbar selection
-    if (use_ttbar_filter_) {
-
-      float minDRlj(9999.);
-      TLorentzVector thejet;
-      thejet.SetPtEtaPhiM(ptjet, etajet, phijet, 0.);      
-      for(int il=0; il<EventInfo.ttbar_nl; il++)
-	{
-	  TLorentzVector theLepton;
-	  theLepton.SetPtEtaPhiM(EventInfo.ttbar_lpt[il],
-				 EventInfo.ttbar_leta[il],
-				 EventInfo.ttbar_lphi[il],
-				 EventInfo.ttbar_lm[il]);
-	  float dR(thejet.DeltaR(theLepton));
-	  if(dR>minDRlj) continue;
-	  minDRlj=dR;
-	}
-      if(EventInfo.ttbar_chan>=0 && minDRlj<0.4) continue;
-    }
+    if (use_ttbar_filter_) 
+      {
+	float minDRlj(9999.);
+	TLorentzVector thejet;
+	thejet.SetPtEtaPhiM(ptjet, etajet, phijet, 0.);      
+	for(int il=0; il<EventInfo.ttbar_nl; il++)
+	  {
+	    TLorentzVector theLepton;
+	    theLepton.SetPtEtaPhiM(EventInfo.ttbar_lpt[il],
+				   EventInfo.ttbar_leta[il],
+				   EventInfo.ttbar_lphi[il],
+				   EventInfo.ttbar_lm[il]);
+	    float dR(thejet.DeltaR(theLepton));
+	    if(dR>minDRlj) continue;
+	    minDRlj=dR;
+	  }
+	if(EventInfo.ttbar_chan>=0 && minDRlj<0.4) continue;
+      }
     //// end of removal
 
     int flavour  =-1  ;
