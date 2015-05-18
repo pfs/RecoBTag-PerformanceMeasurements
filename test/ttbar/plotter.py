@@ -3,6 +3,8 @@ import os,sys
 import json
 import ROOT
 
+from runTTbarAnalysis import LUMI
+
 """
 A wrapper to store data and MC histograms for comparison
 """
@@ -152,7 +154,7 @@ class Plot(object):
         txt.SetTextFont(43)
         txt.SetTextSize(16)
         txt.SetTextAlign(12)
-        txt.DrawLatex(0.18,0.95,'#bf{CMS} #it{Preliminary}')
+        txt.DrawLatex(0.18,0.95,'#bf{CMS} #it{Preliminary} %3.1f fb^{-1} (13 TeV)' % (LUMI/1000.) )
 
         #holds the pull
         c.cd()

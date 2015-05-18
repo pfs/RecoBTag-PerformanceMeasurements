@@ -11,7 +11,8 @@ def main():
     #configuration
     usage = 'usage: %prog [options]'
     parser = optparse.OptionParser(usage)
-    parser.add_option('-i', '--inDir',       dest='inDir',       help='input directory with files',   default=None,        type='string')
+    parser.add_option('-i', '--inDir',       dest='inDir',       help='input directory with files',      default=None,   type='string')
+    parser.add_option('-c', '--cleanup',     dest='cleanup',     help='removes original crab directory', default =False, action='store_true')
     (opt, args) = parser.parse_args()
 
     dset_list=getEOSlslist(directory=opt.inDir,prepend='')
@@ -30,21 +31,22 @@ def main():
             continue
         time_stamp=time_list[0].split('/')[-1]
 
-
         out_list=[]
         count_list=getEOSlslist(directory=time_list[0],prepend='')
         for count in count_list: out_list += getEOSlslist(directory=count,prepend='')
         file_list=[x for x in out_list if '.root' in x]
 
         newDir='%s/%s' % (opt.inDir,pub)        
-        newDir=newDir.replace('8TeV','13TeV')
         print '<primary-dataset>=%s <publication-name>=crab_%s <time-stamp>=%s has %d files' % (dsetname,pub,time_stamp,len(file_list) )
-        choice = raw_input('Will move to %s and delete current output directory. [y/n] ?' % newDir ).lower()
+        choice = raw_input('Will move to %s current output directory. [y/n] ?' % newDir ).lower()
         if not 'y' in choice : continue
 
         os.system('cmsMkdir %s' % newDir)
         for f in file_list : os.system('cmsStage -f %s %s/' % (f, newDir) )
-        os.system('cmsRm -r %s' % dset)
+        if opt.cleanup : 
+            choce = raw_input('Will remove output directory. [y/n] ?').lower()
+            if 'y' in choice: os.system('cmsRm -r %s' % dset)
+
         print 'Crab outputs may now be found in %s' % newDir
 
     print '-'*50

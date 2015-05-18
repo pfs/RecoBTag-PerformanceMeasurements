@@ -4,7 +4,7 @@
 "MC13TeV_WJets"              : [50100,  0, "/WJetsToLNu_13TeV-madgraph-pythia8-tauola/Phys14DR-PU20bx25_PHYS14_25_V1-v1/MINIAODSIM",                "W+jets",            797],
 "MC13TeV_SingleTbar_tW"      : [35.6,   0, "/Tbar_tW-channel-DR_Tune4C_13TeV-CSA14-powheg-tauola/Phys14DR-PU20bx25_PHYS14_25_V1-v1/MINIAODSIM",     "Single top",        865],
 "MC13TeV_SingleT_tW"         : [35.6,   0, "/T_tW-channel-DR_Tune4C_13TeV-CSA14-powheg-tauola/Phys14DR-PU20bx25_PHYS14_25_V1-v1/MINIAODSIM",        "Single top",        865],
-"MC13TeV_TTJets"             : [831.76, 0, "/TTJets_MSDecaysCKM_central_Tune4C_13TeV-madgraph-tauola/Phys14DR-PU20bx25_PHYS14_25_V1-v1/MINIAODSIM", "t#bar{t}",          922]
+"MC13TeV_TTJets"             : [831.76, 0, "/TTJets_MSDecaysCKM_central_Tune4C_13TeV-madgraph-tauola/Phys14DR-PU20bx25_PHYS14_25_V1-v1/MINIAODSIM", "t#bar{t}",          920]
 }
 
 

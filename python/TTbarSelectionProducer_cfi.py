@@ -16,8 +16,8 @@ ttbarselectionproducer = cms.EDProducer("TTbarSelectionProducer",
                                         muon_cut_eta     = cms.double(2.4),
                                         muon_cut_iso     = cms.double(0.15),
                                         jetColl          = cms.InputTag("slimmedJets"),
-                                        jet_cut_pt       = cms.double(30),
+                                        jet_cut_pt       = cms.double(20),
                                         jet_cut_eta      = cms.double(2.5),
                                         metColl          = cms.InputTag("slimmedMETs"),
-                                        met_cut          = cms.double(40)
+                                        met_cut          = cms.double(0)
                                         )
