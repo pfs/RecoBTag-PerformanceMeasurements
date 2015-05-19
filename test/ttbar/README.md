@@ -35,7 +35,7 @@ Once production is finished you can call with --cleanup to remove original crab 
 
 ### Running local analysis
 ```
-python runTTbarAnalysis.py -i /store/group/phys_top/psilva/BTV/d214360 -j ttbar_phys14.json -n 8
+python runTTbarAnalysis.py -i /store/group/phys_top/psilva/BTV/d214360 -j ttbar_phys14.json -t taggers_phys14.json -n 8
 ```
 Once grid jobs are run, and ntuples are stored in a given directory, you can run the local analysis to produce the slimmed ntuples for the efficiency measurement.
 MC will be weighted by cross section. The number after -n indicates how many threads should be used.
@@ -50,13 +50,20 @@ Makes control plots and stores all in a ROOT file. Different options may be pass
 
 ### Performance analyses
 
-#### KIN method
+#### Templated methods
 ```
 sh KIN_runClassifier.sh
 ```
 After running the local analysis use the kin tree stored in the ttbar sample to train a kinematics discriminator for b-jets in ttbar events.
 The script compiles and runs KIN_trainClassifier.C which should be modified in case different trainings are required.
-
-#### JP method
+```
+python runTTbarAnalysis.py -i /store/group/phys_top/psilva/BTV/d214360 -j ttbar_phys14.json -t taggers_phys14.json --tmvaWgts analysis/KIN_weights/TMVAClassification_BDT.weights.xml -n 8
+```
+Re-run the analysis to store the KIN discriminator value per jet
+```
+python Templated_btagEffFitter.py -i analysis/ -o analysis/ -t taggers_phys14.json
+```
+Runs the fits to the templates to determine the scale factors. Valid for KIN, Mlj, JP, others one may wish to add.
+The base procedure is similar for all.
 
 #### FtM method

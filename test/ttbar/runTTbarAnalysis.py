@@ -7,6 +7,7 @@ import pickle
 import math
 from array import array
 from storeTools import getEOSlslist
+from systTools import smearJetEnergyResolution
 
 LUMI=100
 CHANNELS={-11*11:'ll', -13*13:'ll', -11*13:'emu'}
@@ -14,7 +15,7 @@ CHANNELS={-11*11:'ll', -13*13:'ll', -11*13:'emu'}
 """
 Perform the analysis on a single file
 """
-def runTTbarAnalysis(inFile, outFile, wgt):
+def runTTbarAnalysis(inFile, outFile, wgt, taggers, tmvaWgts=None):
 
     #prepare output and histograms
     outF=ROOT.TFile.Open(outFile,'RECREATE')
@@ -23,27 +24,63 @@ def runTTbarAnalysis(inFile, outFile, wgt):
         'rho'    : ROOT.TH1F('rho',    ';#rho [GeV];Events',                      50, 0, 30),
         'mll'    : ROOT.TH1F('mll',    ';Dilepton invariant mass [GeV];Events',   50, 0, 250),
         'met'    : ROOT.TH1F('met',    ';Missing transverse energy [GeV];Events', 50, 0, 250),
-        'jetpt'  : ROOT.TH1F('jetpt',  ';Transverse momentum [GeV]; Events',      50, 0, 200),
-        'jeteta' : ROOT.TH1F('jeteta', ';Pseudo-rapidity; Events',                25, 0, 2.5),
-        'njets'  : ROOT.TH1F('njets',  ';Jet multiplicity;Events;',               6,  2, 8),
-        'jp'     : ROOT.TH1F('jp',     ';Jet probability; Jets;',                 50, 0, 2.5)
+        'njets'  : ROOT.TH1F('njets',  ';Jet multiplicity;Events;',               6,  2, 8)
         }
 
+    #init KIN tree
     kinTree=ROOT.TTree('kin','kin training')
     kinTree.SetDirectory(outF)
-    kinVars={'signal'     : (array( 'i', [ 0 ]), ';b-jet;Jets',                         2,  0, 2 ),
-             'close_mlj'  : (array( 'f', [ 0.]), ';M(lepton,jet) [GeV]; Jets',          50, 0, 250),
+    kinVars={'flavour'    : (array( 'i', [ 0 ]),   ';Jet flavour;Jets',                   4,  0, 4 ),
+             'jetpt'      : (array( 'f', [ 0.]*5), ';Transverse momentum [GeV]; Jets',   50,  0, 200),
+             'jeteta'     : (array( 'f', [ 0.]),   ';Pseudo-rapidity; Jets',              25, 0, 2.5),
+             'close_mlj'  : (array( 'f', [ 0.]*5), ';M(lepton,jet) [GeV]; Jets',          50, 0, 250),
              'close_deta' : (array( 'f', [ 0.]), ';#Delta#eta(lepton,jet); Jets',       50, 0, 4),
              'close_dphi' : (array( 'f', [ 0.]), ';#Delta#phi(lepton,jet) [rad]; Jets', 50, 0, 3.15),
              'close_ptrel': (array( 'f', [ 0.]), ';p_{T}^{rel}(lepton,jet) [GeV];Jets', 50, 0, 1),
              'far_mlj'    : (array( 'f', [ 0.]), ';M(lepton,jet) [GeV]; Jets',          50, 0, 250),
              'far_deta'   : (array( 'f', [ 0.]), ';#Delta#eta(lepton,jet); Jets',       50, 0, 4),
              'far_dphi'   : (array( 'f', [ 0.]), ';#Delta#phi(lepton,jet) [rad]; Jets', 50, 0, 3.15),
-             'far_ptrel'  : (array( 'f', [ 0.]), ';p_{T}^{rel}(lepton,jet) [GeV];Jets', 50, 0, 1) }
-    for v in kinVars:
-        vtype = 'I' if v=='signal' else 'F'
-        kinTree.Branch( v, kinVars[v][0], '%s/%s' % (v,vtype) )
-        baseHistos[v] = ROOT.TH1F(v,kinVars[v][1],kinVars[v][2],kinVars[v][3],kinVars[v][4])
+             'far_ptrel'  : (array( 'f', [ 0.]), ';p_{T}^{rel}(lepton,jet) [GeV];Jets', 50, 0, 1),
+             'kindisc'    : (array( 'f', [ 0.]*5), ';Kinematics discriminator;Jets',      50, -1, 1),}
+
+    #b-tagging variables (read from json)
+    taggersFile = open(taggers,'r')
+    taggersList = json.load(taggersFile,encoding='utf-8').items()
+    taggersFile.close()
+    for tagger, taggerDef in taggersList :
+        title, firstOP, lastOP = taggerDef[0], taggerDef[2], taggerDef[-1]
+        kinVars[str(tagger+'Tagger')]     = (array('f',[0.]), ';%s;Jets'%title,             50, ROOT.TMath.Min(firstOP,0), lastOP )
+    kinVars['weight'] = (array('f',[0.]*7),)
+
+    #add to tree and init histograms
+    for v in kinVars.iterkeys():
+        vtype = 'I' if v=='flavour' else 'F'
+        if v=='kindisc' or v=='close_mlj' or v=='jetpt':
+            kinTree.Branch( v, kinVars[v][0], '%s[5]/%s' % (v,vtype) )
+        elif v=='weight':
+            kinTree.Branch( v, kinVars[v][0], '%s[7]/%s' % (v,vtype) )
+        else:
+            kinTree.Branch( v, kinVars[v][0], '%s/%s' % (v,vtype) )
+        try:
+            baseHistos[v] = ROOT.TH1F(v,kinVars[v][1],kinVars[v][2],kinVars[v][3],kinVars[v][4])
+        except:
+            pass
+    baseHistos['flavour'].GetXaxis().SetBinLabel(1,'unmatched')
+    baseHistos['flavour'].GetXaxis().SetBinLabel(2,'udsg')
+    baseHistos['flavour'].GetXaxis().SetBinLabel(3,'c')
+    baseHistos['flavour'].GetXaxis().SetBinLabel(4,'b')
+
+    #init a tmva reader
+    tmvaReader=None if tmvaWgts is None else ROOT.TMVA.Reader()
+    tmvaVars={}
+    if not tmvaReader is None :
+        ivar=0
+        for v in ['close_mlj[0]', 'close_ptrel', 'close_dphi', 'close_deta',
+                  'far_mlj',      'far_ptrel',   'far_dphi',   'far_deta']:
+            tmvaVars[v]=array('f',[0.])
+            tmvaReader.AddVariable(v,tmvaVars[v])
+            ivar+=1
+        tmvaReader.BookMVA('BDT',tmvaWgts)
 
     #replicate histos per channel
     histos={}
@@ -77,60 +114,130 @@ def runTTbarAnalysis(inFile, outFile, wgt):
         mll=(lp4[0]+lp4[1]).M()
 
 
-        selJets=[]
-        ljkinVars=[]
+        #select jets
+        jetCount=[0]*5
+        selJets={}
         for ij in xrange(0,tree.nJet):
-            if tree.Jet_pt[ij]<30 or math.fabs(tree.Jet_eta[ij])>2.5 : continue
-            jp4=ROOT.TLorentzVector()
-            jp4.SetPtEtaPhiM(tree.Jet_pt[ij],tree.Jet_eta[ij],tree.Jet_phi[ij],0.)
 
-            minDRlj=9999.
-            ljkin=[]
-            for il in xrange(0,tree.ttbar_nl):
-                dphi=ROOT.TMath.Abs(lp4[il].DeltaPhi(jp4))
-                deta=ROOT.TMath.Abs(lp4[il].Eta()-jp4.Eta())
-                dr=lp4[il].DeltaR(jp4)
-                minDRlj=ROOT.TMath.Min( minDRlj, dr )
-                ptrel=ROOT.Math.VectorUtil.Perp(lp4[il].Vect(),jp4.Vect().Unit())/lp4[il].P();
-                ljkin.append( ( (lp4[il]+jp4).M(),dr,deta,dphi,ptrel ) )                
-            if minDRlj<0.4 : continue
+                #update jet energy scale/resolution
+                jp4=ROOT.TLorentzVector()
+                jp4.SetPtEtaPhiM(tree.Jet_pt[ij],tree.Jet_eta[ij],tree.Jet_phi[ij],0.)
+                jp4 *= smearJetEnergyResolution(pt=jp4.Pt(),eta=jp4.Eta(),genpt=tree.Jet_genpt[ij],varSign=0.0)
 
-            selJets.append(ij)
-            ljkin=sorted(ljkin, key=lambda pair: pair[1])
-            ljkinVars.append( ljkin )
+                #cross clean first, as precaution
+                minDRlj=9999.
+                for il in xrange(0,tree.ttbar_nl) : minDRlj = ROOT.TMath.Min( minDRlj, lp4[il].DeltaR(jp4) )
+                if minDRlj<0.4 : continue
 
-        #require two jets
-        njets=len(selJets)
-        if njets<2 : continue
-        histos[ch+'_njets'].Fill(njets,wgt)
+                #apply energy shifts according to systematic variation
+                canBeSelected=False
+                selJets[ij]=[]
+                for iSystVar in xrange(0,5):
+                    sf=1.0
+                    if iSystVar==1 : sf = 1.03
+                    if iSystVar==2 : sf = 0.97
+                    if iSystVar==3 : sf = smearJetEnergyResolution(pt=jp4.Pt(),eta=jp4.Eta(),genpt=tree.Jet_genpt[ij],varSign=1.0)
+                    if iSystVar==4 : sf = smearJetEnergyResolution(pt=jp4.Pt(),eta=jp4.Eta(),genpt=tree.Jet_genpt[ij],varSign=-1.0)
+                    varjp4=ROOT.TLorentzVector(jp4)
+                    varjp4 *= sf
+                    selJets[ij].append(varjp4)
+
+                    #select in fiducial region
+                    if varjp4.Pt()<30 or math.fabs(varjp4.Eta())>2.5 : continue
+                    canBeSelected=True
+                    jetCount[iSystVar]+=1                
+
+                #if never in kinematic range forget this jet
+                if not canBeSelected : del selJets[ij]
+
 
         #n-1 plots
         zCand   = True if 'll' in ch and ROOT.TMath.Abs(mll-91)<15 else False
         passMet = True if 'emu' in ch or tree.ttbar_metpt>40 else False
-        if passMet   : histos[ch+'_mll'].Fill(mll,wgt)
-        if not zCand : histos[ch+'_met'].Fill(tree.ttbar_metpt,wgt)
-        if zCand : continue
-        if not passMet : continue
+        passJets = True if len(selJets)>=2 else False
+        if passMet and passJets   : histos[ch+'_mll'].Fill(mll,wgt)
+        if not zCand and passJets : histos[ch+'_met'].Fill(tree.ttbar_metpt,wgt)
+        if zCand        : continue
+        if not passMet  : continue
+        if not passJets : continue
+        
+        #update weights
+        for iSystVar in xrange(0,len(jetCount)):
+            selWeight=1 if jetCount[iSystVar]>=2 else 0
+            kinVars['weight'][0][iSystVar]=wgt*selWeight
+        puWgtUp   = 1.0 if tree.nPV > 17 else 0.0
+        puWgtDown = 1.0 if tree.nPV <= 17 else 0.0
+        kinVars['weight'][0][5]=wgt*puWgtUp
+        kinVars['weight'][0][6]=wgt*puWgtDown
+
+        #plots in control region
         histos[ch+'_npv'].Fill(tree.nPV-1,wgt)
         histos[ch+'_rho'].Fill(tree.ttbar_rho,wgt)        
+        histos[ch+'_njets'].Fill(len(selJets),wgt)
 
-        #jet control plots
+        #save jet tree
         for ij in selJets:
-            histos[ch+'_jetpt'].Fill(tree.Jet_pt[ij],wgt)
-            histos[ch+'_jeteta'].Fill(ROOT.TMath.Abs(tree.Jet_eta[ij]),wgt)
-            histos[ch+'_jp'].Fill(ROOT.TMath.Abs(tree.Jet_Proba[ij]),wgt)
-            kinVars['signal'][0][0]     = 1 if ROOT.TMath.Abs(tree.Jet_flavour[ij])==5 else 0
-            kinVars['close_mlj'][0][0]  = ljkinVars[ij][0][0]
-            kinVars['close_deta'][0][0] = ljkinVars[ij][0][2]
-            kinVars['close_dphi'][0][0] = ljkinVars[ij][0][3]
-            kinVars['close_ptrel'][0][0]= ljkinVars[ij][0][4]
-            kinVars['far_mlj'][0][0]    = ljkinVars[ij][1][0]
-            kinVars['far_deta'][0][0]   = ljkinVars[ij][1][2]
-            kinVars['far_dphi'][0][0]   = ljkinVars[ij][1][3]
-            kinVars['far_ptrel'][0][0]  = ljkinVars[ij][1][4]
-            for v in kinVars : histos[ch+'_'+v].Fill(kinVars[v][0][0],wgt)
+
+            #jet flavour
+            flav=0
+            if ROOT.TMath.Abs(tree.Jet_flavour[ij]) in [1,2,3,21]: flav=1
+            if ROOT.TMath.Abs(tree.Jet_flavour[ij])==4 : flav=2
+            if ROOT.TMath.Abs(tree.Jet_flavour[ij])==5 : flav=3
+            kinVars['jeteta'][0][0]     = ROOT.TMath.Abs(tree.Jet_eta[ij])
+            kinVars['flavour'][0][0]    = flav
+
+            #value of b-taggers for this jet
+            for tag,tagDef in taggersList :
+                tagVal=getattr(tree,tagDef[1])[ij]
+                kinVars[tag+'Tagger'][0][0]=tagVal
+                histos['%s_%sTagger' % (ch,tag) ].Fill(tagVal,wgt)
+
+            for iSystVar in xrange(0,len(selJets[ij])):
+
+                #prepare variables for MVA
+                ljkin=[]
+                jp4=selJets[ij][iSystVar]
+                for il in xrange(0,tree.ttbar_nl) : 
+                    dr=lp4[il].DeltaR(jp4)
+                    dphi=ROOT.TMath.Abs(lp4[il].DeltaPhi(jp4))
+                    deta=ROOT.TMath.Abs(lp4[il].Eta()-jp4.Eta())
+                    ptrel=ROOT.Math.VectorUtil.Perp(lp4[il].Vect(),jp4.Vect().Unit())/lp4[il].P();
+                    ljkin.append( ( dr, (lp4[il]+jp4).M(), ptrel, dphi, deta ) )                
+                ljkin=sorted(ljkin, key=lambda pair: pair[0])
+
+                #evaluate MVA
+                tmvaVars['close_mlj[0]'][0]        = ljkin[0][1]
+                tmvaVars['close_ptrel'][0]         = ljkin[0][2]
+                tmvaVars['close_dphi'][0]          = ljkin[0][3]
+                tmvaVars['close_deta'][0]          = ljkin[0][4]
+                tmvaVars['far_mlj'][0]             = ljkin[1][1]
+                tmvaVars['far_ptrel'][0]           = ljkin[1][2]
+                tmvaVars['far_dphi'][0]            = ljkin[1][3]
+                tmvaVars['far_deta'][0]            = ljkin[1][4]                
+                kinVars['close_mlj'][0][iSystVar]  = tmvaVars['close_mlj[0]'][0]
+                kinVars['kindisc'][0][iSystVar]    = tmvaReader.EvaluateMVA('BDT') if not tmvaReader is None else 0
+                kinVars['jetpt'][0][iSystVar]      = jp4.Pt()
+                
+                if iSystVar>0 : continue
+                kinVars['close_ptrel'][0][0]   = tmvaVars['close_ptrel'][0]
+                kinVars['close_dphi'][0][0]    = tmvaVars['close_dphi'][0]
+                kinVars['close_deta'][0][0]    = tmvaVars['close_deta'][0]
+                kinVars['far_mlj'][0][0]       = tmvaVars['far_mlj'][0]
+                kinVars['far_ptrel'][0][0]     = tmvaVars['far_ptrel'][0]
+                kinVars['far_dphi'][0][0]      = tmvaVars['far_dphi'][0]
+                kinVars['far_deta'][0][0]      = tmvaVars['far_deta'][0]
+              
+            #fill histos, when available
+            for v in kinVars :
+                try:
+                    histos[ch+'_'+v].Fill(kinVars[v][0][0],wgt)
+                except:
+                    pass
+
+            #fill tree
             kinTree.Fill()
 
+    #all done with this file
     inF.Close()
     
     #dump results to file
@@ -144,9 +251,9 @@ def runTTbarAnalysis(inFile, outFile, wgt):
 Wrapper to be used when run in parallel
 """
 def runTTbarAnalysisPacked(args):
-    inFile, outFile, wgt = args
+    inFile, outFile, wgt, taggers, tmvaWgts = args
     try:
-        return runTTbarAnalysis(inFile=inFile, outFile=outFile, wgt=wgt)
+        return runTTbarAnalysis(inFile=inFile, outFile=outFile, wgt=wgt, taggers=taggers, tmvaWgts=tmvaWgts)
     except :
         print 50*'<'
         print "  Problem  (%s) with %s continuing without"%(sys.exc_info()[1],inFile)
@@ -162,10 +269,12 @@ def main():
     #configuration
     usage = 'usage: %prog [options]'
     parser = optparse.OptionParser(usage)
+    parser.add_option('-t', '--taggers',     dest='taggers'  ,   help='json with list of taggers',      default=None,        type='string')
     parser.add_option('-j', '--json',        dest='json'  ,      help='json with list of files',      default=None,        type='string')
     parser.add_option('-i', '--inDir',       dest='inDir',       help='input directory with files',   default=None,        type='string')
     parser.add_option('-l', '--lumi',        dest='lumi',        help='integrated luminosity to use', default=100.,        type='float')
     parser.add_option('-o', '--outDir',      dest='outDir',      help='output directory',             default='analysis',  type='string')
+    parser.add_option(      '--tmvaWgts',    dest='tmvaWgts',    help='tmva weights',             default=None,  type='string')
     parser.add_option('-n', '--njobs',       dest='njobs',       help='# jobs to run in parallel',    default=0,           type='int')
     (opt, args) = parser.parse_args()
 
@@ -223,14 +332,14 @@ def main():
         wgt = xsecWgts[tag]
         for nf in xrange(0,len(input_list)) : 
             outF='%s/%s_%d.root'%(opt.outDir,tag,nf)
-            task_list.append( (input_list[nf],outF,wgt) )
+            task_list.append( (input_list[nf],outF,wgt, opt.taggers, opt.tmvaWgts) )
     task_list=list(set(task_list))
     print '%s jobs to run in %d parallel threads' % (len(task_list), opt.njobs)
 
     #run the analysis jobs
     if opt.njobs == 0:
-        for inFile, outFile,wgt in task_list: 
-            runTTbarAnalysis(inFile=inFile, outFile=outFile, wgt=wgt)
+        for inFile, outFile,wgt, taggers, tmvaWgts in task_list: 
+            runTTbarAnalysis(inFile=inFile, outFile=outFile, wgt=wgt, taggers=opt.taggers, tmvaWgts=tmvaWgts)
     else:
         from multiprocessing import Pool
         pool = Pool(opt.njobs)

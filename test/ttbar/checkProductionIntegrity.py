@@ -13,6 +13,7 @@ def main():
     parser = optparse.OptionParser(usage)
     parser.add_option('-i', '--inDir',       dest='inDir',       help='input directory with files',      default=None,   type='string')
     parser.add_option('-c', '--cleanup',     dest='cleanup',     help='removes original crab directory', default =False, action='store_true')
+    parser.add_option(      '--nocheck',     dest='nocheck',     help='do not prompt user',              default=False,  action='store_true')
     (opt, args) = parser.parse_args()
 
     dset_list=getEOSlslist(directory=opt.inDir,prepend='')
@@ -38,12 +39,13 @@ def main():
 
         newDir='%s/%s' % (opt.inDir,pub)        
         print '<primary-dataset>=%s <publication-name>=crab_%s <time-stamp>=%s has %d files' % (dsetname,pub,time_stamp,len(file_list) )
-        choice = raw_input('Will move to %s current output directory. [y/n] ?' % newDir ).lower()
-        if not 'y' in choice : continue
+        if not opt.nocheck:
+            choice = raw_input('Will move to %s current output directory. [y/n] ?' % newDir ).lower()
+            if not 'y' in choice : continue
 
         os.system('cmsMkdir %s' % newDir)
         for f in file_list : os.system('cmsStage -f %s %s/' % (f, newDir) )
-        if opt.cleanup : 
+        if not opt.nocheck and opt.cleanup : 
             choce = raw_input('Will remove output directory. [y/n] ?').lower()
             if 'y' in choice: os.system('cmsRm -r %s' % dset)
 

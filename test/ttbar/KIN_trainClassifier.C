@@ -194,26 +194,30 @@ void KIN_trainClassifier( TString myMethodList = "", TString inputFile="", Int_t
    
   //if (gSystem->AccessPathName( fname ))  // file does not exist in local directory
   //   gSystem->Exec("wget http://root.cern.ch/files/tmva_class_example.root");
-   
-  
-  //   std::cout << "--- TMVAClassification       : Using input file: " << input->GetName() << std::endl;
-   
   // --- Register the training and test trees
   TFile *inF=TFile::Open(inputFile);
+
   TTree *t=(TTree *)inF->Get("kin");
-  factory->SetInputTrees(t,"signal==1","signal==0");
+  
+  outputFile->cd();
+
+  //b-jets are saved as 3, require that the event passes nominal preselection (weight[0]>0)
+  factory->SetInputTrees(t,"flavour==3 && weight[0]>0","flavour!=3 && weight[0]>0");
+
+  //use common weight in the events
+  factory->SetSignalWeightExpression("weight[0]");
+  factory->SetBackgroundWeightExpression("weight[0]");
 
   //define variables for the training
-  factory->AddVariable( "close_mlj",   "M(closest lepton,jet)"              "GeV", 'F' );
-  factory->AddVariable( "close_ptrel", "p_{T}^{rel}(closest lepton)/p(closest lepton)"    "", 'F' );
-  factory->AddVariable( "close_dphi",  "#Delta#phi(closest lepton,jet)"   "rad", 'F' );
-  factory->AddVariable( "close_deta",  "#Delta#eta(closest lepton,jet)"    "",   'F' );
-  factory->AddVariable( "far_mlj",     "M(furthest lepton,jet)"              "GeV", 'F' );
-  factory->AddVariable( "far_ptrel",   "p_{T}^{rel}(furthest lepton)/p(farst lepton)"    "", 'F' );
-  factory->AddVariable( "far_dphi",    "#Delta#phi(furthest lepton,jet)"   "rad", 'F' );
-  factory->AddVariable( "far_deta",    "#Delta#eta(furthest lepton,jet)"    "",   'F' );
+  factory->AddVariable( "close_mlj[0]","M(close lepton,jet)"                            "GeV", 'F' );
+  factory->AddVariable( "close_ptrel", "p_{T}^{rel}(close lepton)/p(closest lepton)"    "",    'F' );
+  factory->AddVariable( "close_dphi",  "#Delta#phi(close lepton,jet)"                   "rad", 'F' );
+  factory->AddVariable( "close_deta",  "#Delta#eta(close lepton,jet)"                   "",    'F' );
+  factory->AddVariable( "far_mlj",     "M(far lepton,jet)"                              "GeV", 'F' );
+  factory->AddVariable( "far_ptrel",   "p_{T}^{rel}(far lepton)/p(far lepton)"          "",    'F' );
+  factory->AddVariable( "far_dphi",    "#Delta#phi(far lepton,jet)"                     "rad", 'F' );
+  factory->AddVariable( "far_deta",    "#Delta#eta(far lepton,jet)"                     "",    'F' );
     
-
   // Apply additional cuts on the signal and background samples (can be different)
   TCut mycuts = ""; 
   TCut mycutb = ""; 

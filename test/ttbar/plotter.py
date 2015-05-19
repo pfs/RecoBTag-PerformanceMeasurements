@@ -41,6 +41,7 @@ class Plot(object):
                 self.mc[title].Add(h)
             except:
                 self.mc[title]=h
+                self.mc[title].SetName('%s_%s' % (self.mc[title].GetName(), title ) )
                 self.mc[title].SetDirectory(0)
                 self.mc[title].SetMarkerStyle(1)
                 self.mc[title].SetMarkerColor(color)
@@ -119,6 +120,7 @@ class Plot(object):
         if nlegCols ==0 :
             print '%s is empty'%self.name
             return
+        leg.SetNColumns(ROOT.TMath.Min(nlegCols/2,3))
 
         # Build the stack to plot from all backgrounds
         totalMC = None
