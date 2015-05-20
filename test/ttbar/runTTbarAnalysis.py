@@ -9,7 +9,7 @@ from array import array
 from storeTools import getEOSlslist
 from systTools import smearJetEnergyResolution
 
-LUMI=100
+LUMI=1000
 CHANNELS={-11*11:'ll', -13*13:'ll', -11*13:'emu'}
 
 """
@@ -272,15 +272,16 @@ def main():
     parser.add_option('-t', '--taggers',     dest='taggers'  ,   help='json with list of taggers',      default=None,        type='string')
     parser.add_option('-j', '--json',        dest='json'  ,      help='json with list of files',      default=None,        type='string')
     parser.add_option('-i', '--inDir',       dest='inDir',       help='input directory with files',   default=None,        type='string')
-    parser.add_option('-l', '--lumi',        dest='lumi',        help='integrated luminosity to use', default=100.,        type='float')
+    parser.add_option('-l', '--lumi',        dest='lumi',        help='integrated luminosity to use', default=None,        type='float')
     parser.add_option('-o', '--outDir',      dest='outDir',      help='output directory',             default='analysis',  type='string')
     parser.add_option(      '--tmvaWgts',    dest='tmvaWgts',    help='tmva weights',             default=None,  type='string')
     parser.add_option('-n', '--njobs',       dest='njobs',       help='# jobs to run in parallel',    default=0,           type='int')
     (opt, args) = parser.parse_args()
 
     #update luminosity
-    global LUMI
-    LUMI=opt.lumi
+    if opt.lumi:
+        global LUMI
+        LUMI=opt.lumi
     
     #read list of samples
     jsonFile = open(opt.json,'r')

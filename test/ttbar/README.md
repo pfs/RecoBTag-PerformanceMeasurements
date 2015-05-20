@@ -7,9 +7,9 @@ cmsrel CMSSW_7_4_0
 cd CMSSW_7_4_0/src
 cmsenv
 git cms-merge-topic ikrav:egm_id_74X_v0
-git clone -b 7_4_X_dev git@github.com:pfs/RecoBTag-PerformanceMeasurements.git RecoBTag/PerformanceMeasurements
-git clone -b V00-00-01 git://github.com/cms-btv-pog/cms-EventCounter.git MyAnalysis/EventCounter
 git cms-merge-topic -u cms-btv-pog:TrackHistoryUpdate_from-CMSSW_7_4_0_pre7
+git clone -b V00-00-01 git://github.com/cms-btv-pog/cms-EventCounter.git MyAnalysis/EventCounter
+git clone -b 7_4_X_dev git@github.com:pfs/RecoBTag-PerformanceMeasurements.git RecoBTag/PerformanceMeasurements
 scram b -j 8
 cmsenv
 ```
@@ -61,9 +61,14 @@ python runTTbarAnalysis.py -i /store/group/phys_top/psilva/BTV/d214360 -j ttbar_
 ```
 Re-run the analysis to store the KIN discriminator value per jet
 ```
-python Templated_btagEffFitter.py -i analysis/ -o analysis/ -t taggers_phys14.json
+python Templated_btagEffFitter.py -i analysis/ -o analysis/ -t taggers_phys14.json -n 8
 ```
 Runs the fits to the templates to determine the scale factors. Valid for KIN, Mlj, JP, others one may wish to add.
-The base procedure is similar for all.
+The base procedure is similar for all. The first time to run will take a long time as templates need to be created.
+If templates are stable and only fits need to be redone when can run with the option "--recycleTemplates"
+```
+python Templated_btagEffFitter.py --show analysis//close_mlj_templates/.csvivf_fits.pck,analysis//kindisc_templates/.csvivf_fits.pck,analysis//jpTagger_templates/.csvivf_fits.pck
+```
+Fit results are stored in pickle files which can be used to produce the final summary plots.
 
 #### FtM method
