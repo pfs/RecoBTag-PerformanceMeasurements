@@ -120,13 +120,16 @@ void TTbarEventAnalysis::prepareOutput(TString outFile)
 }  
 
 //
-void TTbarEventAnalysis::processFile(TString inFile,float xsecWgt)
+void TTbarEventAnalysis::processFile(TString inFile,TH1F *xsecWgt,Bool_t isData)
 {
   //loop over events
   TFile *inF=TFile::Open(inFile);
   TTree *tree=(TTree *)inF->Get("btagana/ttree");
   Int_t nentries=tree->GetEntriesFast();
-  std::cout << "...opening " << inFile << " -> analysing " << nentries << " events -> " << outF_->GetName() << " xsec weight=" << xsecWgt << std::endl;
+  std::cout << "...opening " << inFile << " -> analysing " << nentries << " events -> " << outF_->GetName();
+  if(xsecWgt) std::cout << " xsec weight=" << xsecWgt->GetBinContent(1);
+  if(isData)  std::cout << " is data";
+  std::cout << std::endl;
 
   //prepare reader
   std::vector<Float_t> tmvaVars( tmvaVarNames_.size(), 0. );
@@ -151,6 +154,7 @@ void TTbarEventAnalysis::processFile(TString inFile,float xsecWgt)
     Float_t ttbar_metpt,ttbar_metphi;
     Float_t ttbar_rho;
     Int_t   ttbar_nw;
+    Float_t nPUtrue;
     Float_t ttbar_w[500];
     Int_t nJet;
     Float_t Jet_pt[100],Jet_genpt[100],Jet_area[100],Jet_jes[100],Jet_eta[100],Jet_phi[100],Jet_mass[100];
@@ -163,6 +167,7 @@ void TTbarEventAnalysis::processFile(TString inFile,float xsecWgt)
   tree->SetBranchAddress("Evt"        , &ev.Evt        );
   tree->SetBranchAddress("LumiBlock"  , &ev.LumiBlock  );
   tree->SetBranchAddress("nPV"        , &ev.nPV        );
+  tree->SetBranchAddress("nPUtrue",     &ev.nPUtrue );
   tree->SetBranchAddress("ttbar_chan" , &ev.ttbar_chan);
   tree->SetBranchAddress("ttbar_metfilterWord", &ev.ttbar_metfilterWord);
   tree->SetBranchAddress("ttbar_trigWord", &ev.ttbar_trigWord);
@@ -203,23 +208,23 @@ void TTbarEventAnalysis::processFile(TString inFile,float xsecWgt)
       
       //generator level weights
       Float_t genWgt=ev.ttbar_nw==0 ? 1.0 : ev.ttbar_w[0];
-      if(useOnlySignOfGenWeight_) genWgt=ev.ttbar_w[0]<0 ? -1.0 : 1.0;
       Float_t qcdScaleLo(1.0),qcdScaleHi(1.0),hdampLo(1.0),hdampHi(1.0);
       if(readTTJetsGenWeights_ && ev.ttbar_nw>17)
       {
-	qcdScaleLo=ev.ttbar_w[9];
-	qcdScaleHi=ev.ttbar_w[5];
-	hdampLo=ev.ttbar_w[ev.ttbar_nw-17];
-	hdampHi=ev.ttbar_w[ev.ttbar_nw-9];
+	qcdScaleLo=ev.ttbar_w[9]*(xsecWgt->GetBinContent(10)/xsecWgt->GetBinContent(1));
+	qcdScaleHi=ev.ttbar_w[5]*(xsecWgt->GetBinContent(6)/xsecWgt->GetBinContent(1));
+	hdampLo=ev.ttbar_w[ev.ttbar_nw-17]*(xsecWgt->GetBinContent(ev.ttbar_nw-17+1)/xsecWgt->GetBinContent(1));
+	hdampHi=ev.ttbar_w[ev.ttbar_nw-9]*(xsecWgt->GetBinContent(ev.ttbar_nw-9+1)/xsecWgt->GetBinContent(1));
       }
 
       //pileup weights
       Float_t puWgtLo(1.0), puWgtNom(1.0), puWgtHi(1.0);
-
-      //
-      //MET FILTERS
-      //
-      if(applyMETFilters_ && ev.ttbar_metfilterWord!=0) continue;
+      if(!isData)
+	{
+	  if(puWgtGr_)     puWgtNom = puWgtGr_->Eval(ev.nPUtrue);
+	  if(puWgtDownGr_) puWgtLo  = puWgtDownGr_->Eval(ev.nPUtrue);
+	  if(puWgtUpGr_)   puWgtHi  = puWgtUpGr_->Eval(ev.nPUtrue);
+	}
         
       //
       //CHANNEL ASSIGNMENT 
@@ -238,16 +243,7 @@ void TTbarEventAnalysis::processFile(TString inFile,float xsecWgt)
 	  if(triggerBits_[ibit].second!=ev.ttbar_chan) continue;
 	  hasTrigger |= ((ev.ttbar_trigWord>>triggerBits_[ibit].first) & 1);
 	}
-
-      if(applyTriggerEff_)
-	{
-	  if(abs(ev.ttbar_chan)==11*13) { if(!hasTrigger) continue; }
-	  else hasTrigger=true;
-	}
-      else
-	{
-	  if(!hasTrigger) continue;
-	}
+      if(!hasTrigger) continue;
 
       //
       //LEPTONS
@@ -256,7 +252,7 @@ void TTbarEventAnalysis::processFile(TString inFile,float xsecWgt)
 
       //trigger efficiency weight
       Float_t trigWgtLo(1.0), trigWgtNom(1.0), trigWgtHi(1.0);
-      if(applyTriggerEff_)
+      if(!isData)
 	{
 	  std::pair<float,float> eff=getTriggerEfficiency(ev.ttbar_lid[0],ev.ttbar_lpt[0],ev.ttbar_leta[0],
 							  ev.ttbar_lid[1],ev.ttbar_lpt[1],ev.ttbar_leta[1],
@@ -268,7 +264,7 @@ void TTbarEventAnalysis::processFile(TString inFile,float xsecWgt)
 
       //lepton selection efficiency
       Float_t lepSelEffLo(1.0), lepSelEffNom(1.0), lepSelEffHi(1.0);
-      if(applyLepSelEff_)
+      if(!isData)
 	{
 	  for(size_t il=0; il<2; il++)
 	    {
@@ -291,7 +287,11 @@ void TTbarEventAnalysis::processFile(TString inFile,float xsecWgt)
       Float_t mll=dilepton.M();
 
       //nominal event weight
-      Float_t evWgt(xsecWgt*puWgtNom*trigWgtNom*lepSelEffNom*genWgt);
+      Float_t evWgt(1.0);
+      if(!isData){
+	evWgt *= puWgtNom*trigWgtNom*lepSelEffNom*genWgt;
+	if(xsecWgt) evWgt *= xsecWgt->GetBinContent(1);
+      }
       histos_[ch+"_npvinc"]->Fill(ev.nPV-1,evWgt);
 
       //
@@ -597,10 +597,9 @@ void TTbarEventAnalysis::processFile(TString inFile,float xsecWgt)
 std::pair<float,float> TTbarEventAnalysis::getTriggerEfficiency(int id1,float pt1,float eta1,int id2,float pt2,float eta2,int ch)
 {
   std::pair<float,float>res(1.0,0.0);
-  //if(ch==-11*13) { res.first=0.91; res.second=0.05; }
-  if(ch==-11*13) { res.first=1.00; res.second=0.05; }
-  if(ch==-11*11) { res.first=0.95; res.second=0.05; }
-  if(ch==-13*13) { res.first=0.99; res.second=0.001; } // this is a single muon trigger
+  if(ch==-11*13) { res.first=1.0; res.second=0.05; }
+  if(ch==-11*11) { res.first=1.0; res.second=0.05; }
+  if(ch==-13*13) { res.first=1.0; res.second=0.05; } // this is a single muon trigger
  return res;
 }
 
