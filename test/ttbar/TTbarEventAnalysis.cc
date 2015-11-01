@@ -229,9 +229,12 @@ void TTbarEventAnalysis::processFile(TString inFile,TH1F *xsecWgt,Bool_t isData)
       //
       //CHANNEL ASSIGNMENT 
       //
+      if(ev.ttbar_nl<2 || ev.nJet<2) continue;
+      ev.ttbar_chan=ev.ttbar_lid[0]*ev.ttbar_lch[0]*ev.ttbar_lid[1]*ev.ttbar_lch[1]; 
+
       TString ch("");
       if(ev.ttbar_chan==-11*13) ch="emu";
-      if(ev.ttbar_chan==-11*11 || ev.ttbar_chan==-13*13) ch="ll";      
+      if(ev.ttbar_chan==-11*11 || ev.ttbar_chan==-13*13) ch="ll";            
       if(ch=="") continue;
 
       //
@@ -244,11 +247,6 @@ void TTbarEventAnalysis::processFile(TString inFile,TH1F *xsecWgt,Bool_t isData)
 	  hasTrigger |= ((ev.ttbar_trigWord>>triggerBits_[ibit].first) & 1);
 	}
       if(!hasTrigger) continue;
-
-      //
-      //LEPTONS
-      //
-      if(ev.ttbar_nl<2) continue;
 
       //trigger efficiency weight
       Float_t trigWgtLo(1.0), trigWgtNom(1.0), trigWgtHi(1.0);

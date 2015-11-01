@@ -1240,6 +1240,8 @@ void BTagAnalyzerT<IPTI,VTX>::analyze(const edm::Event& iEvent, const edm::Event
   if (use_ttbar_filter_) {
     edm::Handle<int> pIn;
     iEvent.getByLabel(edm::InputTag("ttbarselectionproducer:topChannel"), pIn);
+    EventInfo.ttbar_chan=*pIn;
+
     edm::Handle<int> triggerIn;
     iEvent.getByLabel(edm::InputTag("ttbarselectionproducer:topTrigger"),triggerIn);
     EventInfo.ttbar_trigWord=*triggerIn;

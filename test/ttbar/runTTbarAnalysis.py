@@ -26,9 +26,9 @@ def runTTbarAnalysis(inFile, outFile, wgt, tmvaWgts=None,isData=False):
         if 'MuonEG'   in inFile : 
             evAnalysis.addTriggerBit(0,-11*13)
             evAnalysis.addTriggerBit(1,-11*13)
-        if 'DoubleEG' in inFile : 
+        if 'DoubleElectron' in inFile : 
             evAnalysis.addTriggerBit(2,-11*11)
-        if 'DoubleMu' in inFile :
+        if 'DoubleMuon' in inFile :
             evAnalysis.addTriggerBit(3,-13*13)
     else:
             evAnalysis.addTriggerBit(0,-11*13)

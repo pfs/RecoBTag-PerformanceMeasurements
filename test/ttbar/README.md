@@ -12,6 +12,7 @@ cmsRun runBTagAnalyzer_cfg.py runOnData=False miniAOD=True useTTbarFilter=True m
 Will run locally the analyzer for testing purposes
 ```
 python submitToGrid.py -j data/samples_Run2015_25ns.json -c ${CMSSW_BASE}/src/RecoBTag/PerformanceMeasurements/test/runBTagAnalyzer_cfg.py -s
+python submitToGrid.py -j data/syst_samples_Run2015_25ns.json -c ${CMSSW_BASE}/src/RecoBTag/PerformanceMeasurements/test/runBTagAnalyzer_cfg.py -s
 ```
 Will submit the samples described in the json to the grid.
 Partial submission can be made with -o csv_list
@@ -35,7 +36,6 @@ a conservative +/-10% variation of the central minBias xsec value assumed.
 ### Running local analysis
 ```
 python runTTbarAnalysis.py -i /store/group/phys_btag/performance/TTbar/2015_25ns/8622ee3 -j data/samples_Run2015_25ns.json -n 8
-python runTTbarAnalysis.py -i /store/group/phys_btag/performance/TTbar/2015_25ns/8622ee3 -j data/syst_samples_Run2015_25ns.json -n 8
 ```
 Once grid jobs are run, and ntuples are stored in a given directory, you can run the local analysis to produce the slimmed ntuples for the efficiency measurement.
 MC will be weighted by cross section. The number after -n indicates how many threads should be used.
