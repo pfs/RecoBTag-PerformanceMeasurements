@@ -121,7 +121,7 @@ def main():
         for tag in xsecWgts:
             if not 'DY' in tag: continue
             print tag,xsecWgts[tag].GetBinContent(1),' -> ',
-            xsecWgts[tag]=xsecWgts[tag].Scale(dySF[0])
+            xsecWgts[tag].Scale(dySF[0])
             print xsecWgts[tag].GetBinContent(1)
 
     #create the analysis jobs

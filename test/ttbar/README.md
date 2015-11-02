@@ -70,9 +70,9 @@ python runTTbarAnalysis.py -i /store/group/phys_btag/performance/TTbar/2015_25ns
 ```
 Re-run the analysis to store the KIN discriminator value per jet
 ```
-python Templated_btagEffFitter.py -i analysis/ -o analysis_inc/ -t taggers_Run2015.json -n 8 
-python Templated_btagEffFitter.py -i analysis/ -o analysis_ll/  -t taggers_Run2015.json -n 8 --channels -121,-169
-python Templated_btagEffFitter.py -i analysis/ -o analysis_emu/ -t taggers_Run2015.json -n 8 --channels -143
+python Templated_btagEffFitter.py -i analysis/ -o analysis_inc/ -t data/taggers_Run2015_25ns.json -n 8 
+python Templated_btagEffFitter.py -i analysis/ -o analysis_ll/  -t data/taggers_Run2015_25ns.json -n 8 --channels -121,-169
+python Templated_btagEffFitter.py -i analysis/ -o analysis_emu/ -t data/taggers_Run2015_25ns.json -n 8 --channels -143
 ```
 Runs the fits to the templates to determine the scale factors. Valid for KIN, Mlj, JP, others one may wish to add.
 The base procedure is similar for all. The first time to run will take a long time as templates need to be created.
