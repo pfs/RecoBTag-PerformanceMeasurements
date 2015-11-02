@@ -46,8 +46,7 @@ See https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookCRAB3Tutorial and htt
 It prints out s.th. like "Produced normalization cache (analysis/.xsecweights.pck)"
 In case you update the trees, xsec or lumi you have to remove by hand the pickle file.
 ```
-python plotter.py -i analysis/ -j data/samples_Run2015_25ns.json  -l 1615
-python plotter.py -i analysis/ -j data/samples_Run2015_25ns.json  -l 1615 --only evsel --saveTeX
+python plotter.py -i analysis/ -j data/samples_Run2015_25ns.json  -l 1615 
 ```
 Makes control plots and stores all in a ROOT file. Different options may be passed to filter plots, and show differently the plots. 
 ```

@@ -117,6 +117,10 @@ void TTbarEventAnalysis::prepareOutput(TString outFile)
 	  histos_[tag]->SetDirectory(outF_);
 	}
     }
+
+  histos_["puwgtnorm"] = new TH1F("puwgtnorm", ";puwgtnorm;Events",              4, 0, 4);
+  histos_["puwgtnorm"]->Sumw2();
+  histos_["puwgtnorm"]->SetDirectory(outF_);
 }  
 
 //
@@ -225,6 +229,10 @@ void TTbarEventAnalysis::processFile(TString inFile,TH1F *xsecWgt,Bool_t isData)
 	  if(puWgtDownGr_) puWgtLo  = puWgtDownGr_->Eval(ev.nPUtrue);
 	  if(puWgtUpGr_)   puWgtHi  = puWgtUpGr_->Eval(ev.nPUtrue);
 	}
+      histos_["puwgtnorm" ]->Fill(0.,1.0);
+      histos_["puwgtnorm" ]->Fill(1.,puWgtNom);
+      histos_["puwgtnorm" ]->Fill(2.,puWgtLo);
+      histos_["puwgtnorm" ]->Fill(3.,puWgtHi);
         
       //
       //CHANNEL ASSIGNMENT 
@@ -709,7 +717,16 @@ void TTbarEventAnalysis::finalizeOutput()
 {
   //dump results to file
   outF_->cd();
-  for(std::map<TString,TH1F *>::iterator it = histos_.begin(); it != histos_.end(); it++) it->second->Write();
+  
+  //pileup weighting screws up a bit normalization - fix it a posteriori
+  float puwgtSF(histos_["puwgtnorm" ]->GetBinContent(1)/histos_["puwgtnorm" ]->GetBinContent(2));
+
+  for(std::map<TString,TH1F *>::iterator it = histos_.begin(); it != histos_.end(); it++) 
+    {
+      if(it->first!="puwgtnorm") 
+	it->second->Scale(puwgtSF);
+      it->second->Write();
+    }
   kinTree_->Write();
   if(ftmTree_) ftmTree_->Write();
   outF_->Close();
