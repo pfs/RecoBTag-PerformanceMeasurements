@@ -291,6 +291,7 @@ void TTbarEventAnalysis::processFile(TString inFile,TH1F *xsecWgt,Bool_t isData)
 
       TLorentzVector dilepton(lp4[0]+lp4[1]);
       Float_t mll=dilepton.M();
+      if(mll<12) continue;
 
       //nominal event weight
       Float_t evWgt(1.0);

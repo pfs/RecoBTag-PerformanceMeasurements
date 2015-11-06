@@ -89,3 +89,12 @@ of the b-tagging discriminator shape.
 
 
 #### FtM method
+
+First start by computing the expected efficiencies in the ttbar sample selected
+```
+python saveExpectedBtagEff.py -i analysis/MC13TeV_TTJets.root -t data/taggers_Run2015_25ns.json
+```
+With this in hand one can make the tag counting templates and the observed tag counting histograms
+```
+python FtM_btagEffFitter.py -i analysis -o analysis  -t data/taggers_Run2015_25ns.json -j data/samples_Run2015_25ns.json -n 8
+```

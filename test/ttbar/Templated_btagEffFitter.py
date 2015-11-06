@@ -58,7 +58,13 @@ def prepareTemplates(tagger,taggerDef,var,varRange,channelList,inDir,outDir):
     #fill histos
     for key in chains:
 
-        for i in xrange(0,chains[key].GetEntries()):
+        nentries=chains[key].GetEntries()
+        print 'Starting with %s with %d'%(key,nentries)
+        for i in xrange(0,nentries):
+
+            if i%500 == 0:
+                sys.stdout.write("[%3d/100]\r" % (100*i/float(nentries)))
+                sys.stdout.flush()
 
             chains[key].GetEntry(i)
             
