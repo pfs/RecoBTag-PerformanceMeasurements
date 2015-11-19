@@ -20,7 +20,7 @@ Don't forget to init the environment for crab3
 (e.g. https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookCRAB3Tutorial)
 Other json files with samples (e.g. for systematics scans) are also available under data.
 ```
-python checkProductionIntegrity.py -i /store/group/phys_btag/performance/TTbar/8622ee3 -o /store/group/phys_btag/performance/TTbar/2015_25ns/8622ee3
+python checkProductionIntegrity.py -i /store/group/phys_btag/performance/TTbar/4899b76 -o /store/group/phys_btag/performance/TTbar/2015_25ns/8622ee3
 ```
 Can run as soon as ntuple production starts to end, to move from crab output directories to a more simple directory structure
 which can be easily parsed by the local analysis. 
@@ -46,7 +46,7 @@ See https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookCRAB3Tutorial and htt
 It prints out s.th. like "Produced normalization cache (analysis/.xsecweights.pck)"
 In case you update the trees, xsec or lumi you have to remove by hand the pickle file.
 ```
-python plotter.py -i analysis/ -j data/samples_Run2015_25ns.json  -l 1615 
+python plotter.py -i analysis/ -j data/samples_Run2015_25ns.json  -l 2444
 ```
 Makes control plots and stores all in a ROOT file. Different options may be passed to filter plots, and show differently the plots. 
 ```
@@ -70,9 +70,11 @@ python runTTbarAnalysis.py -i /store/group/phys_btag/performance/TTbar/2015_25ns
 ```
 Re-run the analysis to store the KIN discriminator value per jet
 ```
-python Templated_btagEffFitter.py -i analysis/ -o analysis_inc/ -t data/taggers_Run2015_25ns.json -n 8 
-python Templated_btagEffFitter.py -i analysis/ -o analysis_ll/  -t data/taggers_Run2015_25ns.json -n 8 --channels -121,-169
-python Templated_btagEffFitter.py -i analysis/ -o analysis_emu/ -t data/taggers_Run2015_25ns.json -n 8 --channels -143
+a=(jetpt npv jeteta)
+for i in ${a[@]}; do
+    python Templated_btagEffFitter.py -i analysis/ -o analysis_ll/${i}  -t data/taggers_Run2015_25ns.json -n 8 --channels -121,-169 -s ${i} &
+    python Templated_btagEffFitter.py -i analysis/ -o analysis_emu/${i} -t data/taggers_Run2015_25ns.json -n 8 --channels -143      -s ${i};
+done
 ```
 Runs the fits to the templates to determine the scale factors. Valid for KIN, Mlj, JP, others one may wish to add.
 The base procedure is similar for all. The first time to run will take a long time as templates need to be created.

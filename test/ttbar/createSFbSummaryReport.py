@@ -321,7 +321,7 @@ def showSummary(taggerDef,taggerName,sliceVar,summaryGrsMap,outDir):
         txt.SetTextFont(43)
         txt.SetTextSize(16)
         txt.SetTextAlign(12)
-        lumi=41.6
+        lumi=2444
         if lumi<100:
             txt.DrawLatex(0.05,0.5,'#bf{CMS} #it{Preliminary} %3.1f pb^{-1} (13 TeV)' % lumi)
         else:

@@ -73,7 +73,7 @@ class TTbarEventAnalysis
   std::vector<TString> tmvaVarNames_;
   TMVA::Reader *tmvaReader_;
   TFile *outF_;
-  Int_t eventInfo_[3],ttbar_chan_;
+  Int_t eventInfo_[3],ttbar_chan_,npv_;
   Float_t weight_[15];
   Int_t jetFlavour_[2],jetmult_,jetrank_;
   Float_t jetPt_[2],jetEta_[2];

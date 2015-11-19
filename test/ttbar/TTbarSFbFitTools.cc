@@ -4,12 +4,15 @@
 #include "TCanvas.h"
 #include "TLatex.h"
 #include "TLegend.h"
+#include "TLine.h"
 
 #include "RooHist.h"
 #include "RooRealVar.h"
 #include "RooDataHist.h"
 #include "RooHistPdf.h"
 #include "RooAddPdf.h"
+#include "RooCategory.h"
+#include "RooSimultaneous.h"
 #include "RooPlot.h"
 #include "RooMinuit.h"
 #include "RooFitResult.h"
@@ -227,6 +230,250 @@ TTbarFracFitterResult_t TTbarFracFitter::fit(TObjArray &expTemplates, TH1F *data
   //all done
   return result;
 }
+
+
+//
+TTbarFracFitterResult_t TTbarFracFitter::fit(TObjArray &passTemplates, TH1F *passDataH,
+					     TObjArray &failTemplates, TH1F *failDataH,
+					     Int_t idxOfInterest,TString saveResultIn,
+					     Float_t lumi)
+{
+  using namespace RooFit;
+
+  TTbarFracFitterResult_t result; 
+  
+  //variable to fit
+  RooRealVar x("x",passDataH->GetXaxis()->GetTitle(),passDataH->GetXaxis()->GetXmin(),passDataH->GetXaxis()->GetXmax());
+  x.setBins(passDataH->GetXaxis()->GetNbins());
+
+  //categories
+  RooCategory status("status","status") ;
+  status.defineType("pass") ;
+  status.defineType("fail");
+
+  //Fix mass values and create a mapped data hist
+  std::map<std::string,TH1 *> dataH;
+  dataH["pass"]=passDataH;
+  dataH["fail"]=failDataH;
+  RooDataHist* data = new RooDataHist("data","data",x,status,dataH);
+
+  //compute the expected efficiency
+  std::vector<float> expEff(passTemplates.GetEntriesFast(),0.);
+  for(int i=0; i<passTemplates.GetEntriesFast(); i++)
+    {
+      TH1 *passH=(TH1 *)passTemplates.At(i);
+      TH1 *failH=(TH1 *)failTemplates.At(i);
+      if(passH==0 || failH==0) continue;
+
+      Float_t nPass(passH->Integral()), nFail(failH->Integral());
+      if(nPass+nFail==0) continue;
+
+      expEff[i]=nPass/(nPass+nFail);
+    }
+ 
+  RooArgSet passPDFs,passCounts,passNonPOIPDFs,failPDFs,failCounts,sfVars,failNonPOIPDFs;
+  for(int i=0; i<passTemplates.GetEntriesFast(); i++)
+    {
+      //build the pass PDF
+      TH1 *h=(TH1 *)passTemplates.At(i);
+      TString title(h->GetTitle());
+      TString name("passv"); name+= i;
+      Float_t nExp=h->Integral();
+   
+      //b-tag efficiency scale factor
+      RooRealVar *sfVar= new RooRealVar(Form("sf%d",i),title,1,0,2);      
+      sfVars.add(*sfVar);
+      if(i!=idxOfInterest) sfVar->setConstant(true);
+      
+      //npass expected
+      RooRealVar *npassVar=new RooRealVar(name,name,nExp,nExp,nExp);
+      npassVar->setConstant(true);
+      name.ReplaceAll("v","fv");
+
+
+      //re-scaling of the number of passing jets
+      RooFormulaVar *npassFormulaVar = new RooFormulaVar(name,
+							 "@0*@1",
+							 RooArgSet(*npassVar,*sfVar)
+							 );
+      passCounts.add( *npassFormulaVar );
+      RooDataHist *itempl = new RooDataHist(name+"_hist",name+"_hist", RooArgList(x), Import(*h));
+      RooHistPdf *ipdf    = new RooHistPdf (name+"_pdf", name+"_pdf",  RooArgSet(x), *itempl);
+      ipdf->SetTitle(title);
+      passPDFs.add(*ipdf);
+      if(i!=idxOfInterest) passNonPOIPDFs.add(*ipdf);
+
+      //build the fail PDF
+      h=(TH1 *)failTemplates.At(i);
+      title=h->GetTitle();
+      name="failfv"; name+= i;
+      nExp=h->Integral();      
+      RooFormulaVar *nFailFormulaVar = new RooFormulaVar(name,
+							 Form("@1*%f >=0 ? @0*(1-@1*%f)/(@1*%f) : 0",expEff[i],expEff[i],expEff[i]),
+							 RooArgSet(*npassVar,*sfVar)
+							 );
+      failCounts.add( *nFailFormulaVar );
+      itempl = new RooDataHist(name+"_hist",name+"_hist", RooArgList(x), Import(*h));
+      ipdf    = new RooHistPdf (name+"_pdf", name+"_pdf",  RooArgSet(x), *itempl);
+      ipdf->SetTitle(title);
+      failPDFs.add(*ipdf);
+      if(i!=idxOfInterest) failNonPOIPDFs.add(*ipdf);
+    }
+
+  //create the final pdfs
+  RooSimultaneous *pdf = new RooSimultaneous("pdf","pdf",status);
+  RooAddPdf *finalPassPDF = new RooAddPdf("passpdf","passpdf", passPDFs, passCounts);
+  pdf->addPdf(*finalPassPDF,"pass");
+  RooAddPdf *finalFailPDF = new RooAddPdf("failpdf","failpdf", failPDFs, failCounts);
+  pdf->addPdf(*finalFailPDF,"fail");
+  
+  //fit (using minos has the same behavior of profiling all variables except the parameter of interest)
+  RooRealVar *sfVar=(RooRealVar *)sfVars.find(Form("sf%d",idxOfInterest));
+  RooAbsReal *ll = pdf->createNLL(*data,Extended(true));
+  RooMinuit minuit(*ll);
+  minuit.setErrorLevel(0.5);
+  minuit.migrad();
+  minuit.hesse();
+  RooArgSet poi(*sfVar);
+  result.minuitStatus = minuit.minos(poi);
+  
+  //save result
+  result.nObs    = 0;
+  result.nObsUnc = 0;
+  result.sf      = sfVar->getVal();
+  result.sfUnc   = sfVar->getError();
+  
+  //
+  if(saveResultIn!="")
+    {
+      TCanvas *canvas=new TCanvas("c","c",1000,500);
+      canvas->SetTopMargin(0);
+      canvas->SetBottomMargin(0);
+      canvas->SetRightMargin(0);
+      canvas->SetLeftMargin(0);
+      canvas->Divide(2,1);
+    
+      for(int i=0; i<2; i++)
+	{
+	  std::string statusName(i==0 ? "pass" : "fail");
+	  
+	  TPad *c=(TPad *)canvas->cd(i+1);
+	  c->SetTopMargin(0);
+	  c->SetBottomMargin(0);
+	  c->SetRightMargin(0);
+	  c->SetLeftMargin(0);
+    
+	  TPad *p1 = new TPad("p1","p1",0.0,0.85,1.0,0.0);
+	  p1->SetRightMargin(0.05);
+	  p1->SetLeftMargin(0.12);
+	  p1->SetTopMargin(0.01);
+	  p1->SetBottomMargin(0.1);
+	  p1->Draw();
+	  p1->cd();
+	  RooPlot *frame=x.frame();
+	  data->plotOn(frame,RooFit::Name("data"),RooFit::Cut(("status==status::"+statusName).c_str()));
+	  pdf->plotOn(frame,
+		      RooFit::Slice(status,statusName.c_str()),
+		      RooFit::Name("totalexp"),
+		      RooFit::ProjWData(*data),
+		      RooFit::LineColor(1),
+		      RooFit::LineWidth(1),
+		      RooFit::FillStyle(1001),
+		      RooFit::FillColor(0),
+		      RooFit::MoveToBack());
+	  pdf->plotOn(frame,
+		      RooFit::Slice(status,statusName.c_str()),
+		      RooFit::Name("nonpoifit"),
+		      RooFit::ProjWData(*data),
+		      RooFit::Components(i==0 ? passNonPOIPDFs : failNonPOIPDFs),
+		      RooFit::FillColor(kGray),
+		      RooFit::LineColor(kGray),
+		      RooFit::FillStyle(1001),
+		      RooFit::DrawOption("f"),
+		      RooFit::MoveToBack());
+	  frame->Draw();
+	  frame->GetYaxis()->SetTitleOffset(1.5);
+	  frame->GetXaxis()->SetTitle(x.GetTitle());
+	  Float_t ymax(TMath::Max(passDataH->GetMaximum(),failDataH->GetMaximum())*1.5);
+	  Float_t xmin(frame->GetXaxis()->GetXmin()),xmax(frame->GetXaxis()->GetXmax());
+	  frame->GetYaxis()->SetRangeUser(0,ymax);
+
+	  TLatex *label= new TLatex();
+	  label->SetNDC();
+	  label->SetTextFont(42);
+	  label->SetTextSize(0.04);
+	  if(i==0)
+	    {
+	      label->DrawLatex(0.18,0.94,"#bf{CMS} #it{preliminary}");
+	      label->DrawLatex(0.70,0.94,Form("13 TeV (%3.1f fb^{-1})",lumi));
+	      label->DrawLatex(0.18,0.88,Form("SF=%3.2f#pm%3.2f",sfVar->getVal(),sfVar->getError()));
+	    }
+	  label->DrawLatex(0.70,0.88,i==0 ? "#it{pass category}" : "#it{fail category}");
+
+	  TLine *line=new TLine();
+	  line->SetLineStyle(9);
+	  for(Int_t k=1; k<=3; k++)
+	    {
+	      if(k<3)
+		line->DrawLine(xmin+k*(xmax-xmin)/3.,0,xmin+k*(xmax-xmin)/3.,ymax/1.5);
+	      label->DrawLatex((2*(k-1)+1.)/6.,0.7,Form("#scale[0.6]{#it{=%d jets}}",k+1));
+	    }
+
+	  if(i==0)
+	    {
+	      TLegend *leg=new TLegend(0.18,0.76,0.6,0.88);
+	      leg->SetNColumns(3);
+	      leg->AddEntry("data",      "data",            "p");
+	      leg->AddEntry("totalexp",  sfVar->GetTitle(), "f");
+	      leg->AddEntry("nonpoifit", "others",          "f");
+	      leg->SetFillStyle(0);
+	      leg->SetTextFont(42);
+	      leg->SetBorderSize(0);
+	      leg->SetTextSize(0.035);
+	      leg->Draw();
+	    }
+    
+	  c->cd();
+	  TPad *p2 =new TPad("p2","p2",0.0,0.86,1.0,1.0);
+	  p2->SetBottomMargin(0.05);
+	  p2->SetRightMargin(0.05);
+	  p2->SetLeftMargin(0.12);
+	  p2->SetTopMargin(0.05);
+	  p2->Draw();
+	  p2->cd();
+      
+	  RooHist *hpull = frame->pullHist();
+	  RooPlot *pullFrame = x.frame();
+	  //hpull->plotOn(pullFrame);
+	  pullFrame->addPlotable((RooPlotable *)hpull,"P") ;      
+	  pullFrame->Draw();
+	  pullFrame->GetYaxis()->SetTitle("Pull");
+	  pullFrame->GetYaxis()->SetTitleSize(0.2);
+	  pullFrame->GetYaxis()->SetLabelSize(0.2);
+	  pullFrame->GetXaxis()->SetTitleSize(0);
+	  pullFrame->GetXaxis()->SetLabelSize(0);
+	  pullFrame->GetYaxis()->SetTitleOffset(0.15);
+	  pullFrame->GetYaxis()->SetNdivisions(4);
+	  pullFrame->GetYaxis()->SetRangeUser(-3.1,3.1);
+	  pullFrame->GetXaxis()->SetTitleOffset(0.8);
+	}
+
+      canvas->Modified();
+      canvas->Update();
+      canvas->SaveAs(saveResultIn+".png");
+      canvas->SaveAs(saveResultIn+".pdf");
+      canvas->Delete();
+    }
+
+
+  //free memory
+  delete ll;
+
+  //all done
+  return result;
+}
+
+
 
 //
 TTbarFracFitter::~TTbarFracFitter()

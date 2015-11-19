@@ -15,6 +15,7 @@ void TTbarEventAnalysis::prepareOutput(TString outFile)
   kinTree_->SetDirectory(outF_);
   kinTree_->Branch("EventInfo",    eventInfo_,         "EventInfo[3]/I");
   kinTree_->Branch("ttbar_chan",    &ttbar_chan_,      "ttbar_chan/I");
+  kinTree_->Branch("npvn",    &npv_,      "npv/I");
   kinTree_->Branch("flavour",        jetFlavour_,      "flavour/I");
   kinTree_->Branch("jetmult",       &jetmult_,         "jetmult/I");
   kinTree_->Branch("jetpt",          jetPt_,           "jetpt/F");
@@ -300,6 +301,7 @@ void TTbarEventAnalysis::processFile(TString inFile,TH1F *xsecWgt,Bool_t isData)
 	if(xsecWgt) evWgt *= xsecWgt->GetBinContent(1);
       }
       histos_[ch+"_npvinc"]->Fill(ev.nPV-1,evWgt);
+      npv_=ev.nPV;
 
       //
       //JET/MET SELECTION
@@ -524,8 +526,8 @@ void TTbarEventAnalysis::processFile(TString inFile,TH1F *xsecWgt,Bool_t isData)
 	  Float_t selWeight(jetCount[iSystVar]>=2 ? 1.0 : 0.0);
 	  weight_[iSystVar]=evWgt*selWeight;
 	}
-      weight_[5] = evWgt*puWgtLo/puWgtNom;
-      weight_[6] = evWgt*puWgtHi/puWgtNom;
+      weight_[5] = puWgtNom>0 ? evWgt*puWgtLo/puWgtNom : evWgt;
+      weight_[6] = puWgtLo>0  ? evWgt*puWgtHi/puWgtNom : evWgt;
       weight_[7] = evWgt*trigWgtLo/trigWgtNom;
       weight_[8] = evWgt*trigWgtHi/trigWgtNom;
       weight_[9] = evWgt*lepSelEffLo/lepSelEffNom;

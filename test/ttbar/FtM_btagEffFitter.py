@@ -8,28 +8,30 @@ from plotter import Plot
 
 RELTAGEFFVAR  = 0.5
 JETMULTCATEGS = [2,3,4]
-SLICEBINS     = [(30,60),(60,120),(120,320)]
-SLICEVAR      = 'jetpt'
+SLICEBINS  = [(30,300),(30,50),(50,70),(70,100),(150,200),(200,300)]
+SLICEVAR   = 'jetpt'
+#SLICEBINS  = [(0,30),(0,7),(7,13),(13,16),(16,30)]
+#SLICEVAR   = 'npv'
+
 SYSTVARS      = ['nom',
                  'jesup','jesdn',
-                 'jerup','jerdn',
-                 'puup','pudn',
-                 'trigup','trigdn',
-                 'selup','seldn',
+                 #'jerup','jerdn',
+                 #'puup','pudn',
+                 #'trigup','trigdn',
+                 #'selup','seldn',
                  'qcdscaledn','qcdscaleup',
-                 'hdampdn','hdampup'                
+                 #'hdampdn','hdampup'                
                  ]
 
 """
 Project trees from files to build the templates
 """
-def prepareTemplates(sampleTag,tagger,taggerDef,sliceCat,channelList,btagSFTool,expEffUrl,inDir,outDir):
+def prepareTemplates(sampleTag,tagger,iop,taggerDef,sliceCat,channelList,btagSFTool,expEffUrl,inDir,outDir):
 
     baseName='%s_count_%s_%d%d'%(tagger,SLICEVAR,sliceCat[0]++1,sliceCat[1]+1)
 
     #prepare task systematics and tag counting
-    nOPs=len(taggerDef)-2
-    tagCounting={'nom':[0]*(nOPs-1)}
+    tagCounting={'nom':0}
     TASKSYSTVARS=SYSTVARS[:]
     effCategs=[0]
     effCategs.append(sliceCat[0]+1)
@@ -39,27 +41,27 @@ def prepareTemplates(sampleTag,tagger,taggerDef,sliceCat,channelList,btagSFTool,
         for eff in ['beff','ceff','leff']:
             for sign in ['Up','Down']:
                 TASKSYSTVARS.append( '%s%d%s'%(eff,idx,sign) )
-                tagCounting['%s%d%s'%(eff,idx,sign)]=[0]*(nOPs-1)
+                tagCounting['%s%d%s'%(eff,idx,sign)]=0
         
     #prepare histograms
     histos={}
     nJetMultCategs=len(JETMULTCATEGS)
     histoVars=TASKSYSTVARS
-    for iop in xrange(1,nOPs):
-        for var in histoVars:
-            name='%s_pass%d_%s'%(baseName,iop,var)
-            histos[name]=ROOT.TH1F(name,';Category;Events',3*nJetMultCategs,0,3*nJetMultCategs)
-            for ij in xrange(0,nJetMultCategs):
-                histos[name].GetXaxis().SetBinLabel(ij*3+1,'%dj0t'%JETMULTCATEGS[ij])
-                histos[name].GetXaxis().SetBinLabel(ij*3+2,'%dj1t'%JETMULTCATEGS[ij])
-                histos[name].GetXaxis().SetBinLabel(ij*3+3,'%dj2t'%JETMULTCATEGS[ij])
-            histos[name].Sumw2()
-            histos[name].SetDirectory(0)
+    for var in histoVars:
+        name='%s_pass%d_%s'%(baseName,iop,var)
+        histos[name]=ROOT.TH1F(name,';Category;Events',3*nJetMultCategs,0,3*nJetMultCategs)
+        for ij in xrange(0,nJetMultCategs):
+            histos[name].GetXaxis().SetBinLabel(ij*3+1,'%dj0t'%JETMULTCATEGS[ij])
+            histos[name].GetXaxis().SetBinLabel(ij*3+2,'%dj1t'%JETMULTCATEGS[ij])
+            histos[name].GetXaxis().SetBinLabel(ij*3+3,'%dj2t'%JETMULTCATEGS[ij])
+        histos[name].Sumw2()
+        histos[name].SetDirectory(0)
 
     #report
-    print '...starting %s for category %3.0f to %3.0f / %3.0f to %3.0f'%(tagger,
-                                                                         SLICEBINS[sliceCat[0]][0],SLICEBINS[sliceCat[0]][1],
-                                                                         SLICEBINS[sliceCat[1]][0],SLICEBINS[sliceCat[1]][1])
+    print '...starting %s for category %3.0f to %3.0f / %3.0f to %3.0f with wp=%d'%(tagger,
+                                                                                    SLICEBINS[sliceCat[0]][0],SLICEBINS[sliceCat[0]][1],
+                                                                                    SLICEBINS[sliceCat[1]][0],SLICEBINS[sliceCat[1]][1],
+                                                                                    iop)
     print '   base name is %s'%baseName
     print '   task systematics are',TASKSYSTVARS
     print '   will fill %d histograms'%len(histos)
@@ -106,7 +108,7 @@ def prepareTemplates(sampleTag,tagger,taggerDef,sliceCat,channelList,btagSFTool,
         if jetCats[0]<0 or jetCats[1]<0: continue
                 
         #reset tag counters
-        for tagVar in tagCounting: tagCounting[tagVar]=[0]*(nOPs-1)
+        for tagVar in tagCounting: tagCounting[tagVar]=0
         for ij in xrange(0,2):
                     
             #efficiency variation categories
@@ -125,71 +127,67 @@ def prepareTemplates(sampleTag,tagger,taggerDef,sliceCat,channelList,btagSFTool,
             taggerVal = getattr(chain,tagger)[ij]
 
             #count tags
-            for iop in xrange(1,nOPs):
-
-                expEff = 1.0
-                try:
-                    expEff=expEffGr[tagger][flavName][iop].Eval(jpt) 
-                except:
-                    pass
+            expEff = 1.0
+            try:
+                expEff=expEffGr[tagger][flavName][iop].Eval(jpt) 
+            except:
+                pass
                 
-                passTag = False if taggerVal<taggerDef[iop+1] else True
-                tagCounting['nom' ][iop-1] += int(passTag)
+            passTag = False if taggerVal<taggerDef[iop+1] else True
+            tagCounting['nom' ] += int(passTag)
                     
-                passTagBeffUp,passTagBeffDown = passTag,passTag
-                if flav==5:
-                    passTagBeffUp=btagSFTool.modifyBTagsWithSF(passTagBeffUp,1.0*(1+RELTAGEFFVAR),expEff)
-                    passTagBeffDown=btagSFTool.modifyBTagsWithSF(passTagBeffDown,1.0*(1-RELTAGEFFVAR),expEff)
-                for idx in effCategs:
-                    tagCounting['beff%dUp'%idx][iop-1] += int(passTagBeffUp)
-                    tagCounting['beff%dDown'%idx][iop-1] += int(passTagBeffDown)
+            passTagBeffUp,passTagBeffDown = passTag,passTag
+            if flav==5:
+                passTagBeffUp=btagSFTool.modifyBTagsWithSF(passTagBeffUp,1.0*(1+RELTAGEFFVAR),expEff)
+                passTagBeffDown=btagSFTool.modifyBTagsWithSF(passTagBeffDown,1.0*(1-RELTAGEFFVAR),expEff)
+            for idx in effCategs:
+                tagCounting['beff%dUp'%idx] += int(passTagBeffUp)
+                tagCounting['beff%dDown'%idx] += int(passTagBeffDown)
 
+            passTagCeffUp,passTagCeffDown = passTag,passTag
+            if flav==4:
+                passTagCeffUp=btagSFTool.modifyBTagsWithSF(passTagCeffUp,1.0*(1+RELTAGEFFVAR),expEff)
+                passTagCeffDown=btagSFTool.modifyBTagsWithSF(passTagCeffDown,1.0*(1-RELTAGEFFVAR),expEff)
+            for idx in effCategs:
+                tagCounting['ceff%dUp'%idx] += int(passTagCeffUp)
+                tagCounting['ceff%dDown'%idx] += int(passTagCeffDown)
 
-                passTagCeffUp,passTagCeffDown = passTag,passTag
-                if flav==4:
-                    passTagCeffUp=btagSFTool.modifyBTagsWithSF(passTagCeffUp,1.0*(1+RELTAGEFFVAR),expEff)
-                    passTagCeffDown=btagSFTool.modifyBTagsWithSF(passTagCeffDown,1.0*(1-RELTAGEFFVAR),expEff)
-                for idx in effCategs:
-                    tagCounting['ceff%dUp'%idx][iop-1] += int(passTagCeffUp)
-                    tagCounting['ceff%dDown'%idx][iop-1] += int(passTagCeffDown)
-
-                passTagLeffUp,passTagLeffDown = passTag,passTag
-                if flav!=4 and flav!=5:
-                    passTagLeffUp=btagSFTool.modifyBTagsWithSF(passTagLeffUp,1.0*(1+RELTAGEFFVAR),expEff)
-                    passTagLeffDown=btagSFTool.modifyBTagsWithSF(passTagLeffDown,1.0*(1-RELTAGEFFVAR),expEff)
-                for idx in effCategs:
-                    tagCounting['leff%dUp'%idx][iop-1] += int(passTagLeffUp)
-                    tagCounting['leff%dDown'%idx][iop-1] += int(passTagLeffDown)
+            passTagLeffUp,passTagLeffDown = passTag,passTag
+            if flav!=4 and flav!=5:
+                passTagLeffUp=btagSFTool.modifyBTagsWithSF(passTagLeffUp,1.0*(1+RELTAGEFFVAR),expEff)
+                passTagLeffDown=btagSFTool.modifyBTagsWithSF(passTagLeffDown,1.0*(1-RELTAGEFFVAR),expEff)
+            for idx in effCategs:
+                tagCounting['leff%dUp'%idx] += int(passTagLeffUp)
+                tagCounting['leff%dDown'%idx] += int(passTagLeffDown)
 
         #print sliceVarVal1,sliceVarVal2,'->',effCategs
         #print 'Flavours:',chain.flavour[0],chain.flavour[1]
         #print tagCounting
 
         #fill the histograms        
-        for iop in xrange(1,nOPs):
-            for var in histoVars:
-                name='%s_pass%d_%s'%(baseName,iop,var)
+        for var in histoVars:
+            name='%s_pass%d_%s'%(baseName,iop,var)
                 
-                weight=chain.weight[0]
-                if var=='jesup':      weight=chain.weight[1]
-                if var=='jesdn':      weight=chain.weight[2]
-                if var=='jerup':      weight=chain.weight[3]
-                if var=='jerdn':      weight=chain.weight[4]
-                if var=='puup':       weight=chain.weight[5]
-                if var=='pudn':       weight=chain.weight[6]
-                if var=='trigup':     weight=chain.weight[7]
-                if var=='trigdn':     weight=chain.weight[8]
-                if var=='selup':      weight=chain.weight[9]
-                if var=='seldn':      weight=chain.weight[10]
-                if var=='qcdscaleup': weight=chain.weight[11]
-                if var=='qcdscaledn': weight=chain.weight[12]
-                if var=='hdampup':    weight=chain.weight[13]
-                if var=='hdampdn':    weight=chain.weight[14]
-                nbtags=tagCounting['nom'][iop-1]
-                if 'beff' in var or 'ceff' in var or 'leff' in var:
-                    nbtags=tagCounting[var][iop-1]
-                histos[name].Fill(nbtags+jetMultCateg*3,weight)
-                #print name,nbtags,weight
+            weight=chain.weight[0]
+            if var=='jesup':      weight=chain.weight[1]
+            if var=='jesdn':      weight=chain.weight[2]
+            if var=='jerup':      weight=chain.weight[3]
+            if var=='jerdn':      weight=chain.weight[4]
+            if var=='puup':       weight=chain.weight[5]
+            if var=='pudn':       weight=chain.weight[6]
+            if var=='trigup':     weight=chain.weight[7]
+            if var=='trigdn':     weight=chain.weight[8]
+            if var=='selup':      weight=chain.weight[9]
+            if var=='seldn':      weight=chain.weight[10]
+            if var=='qcdscaleup': weight=chain.weight[11]
+            if var=='qcdscaledn': weight=chain.weight[12]
+            if var=='hdampup':    weight=chain.weight[13]
+            if var=='hdampdn':    weight=chain.weight[14]
+            nbtags=tagCounting['nom']
+            if 'beff' in var or 'ceff' in var or 'leff' in var:
+                nbtags=tagCounting[var]
+            histos[name].Fill(nbtags+jetMultCateg*3,weight)
+            #print name,nbtags,weight
         #print tagCounting
         #raw_input()
                      
@@ -205,17 +203,17 @@ def prepareTemplates(sampleTag,tagger,taggerDef,sliceCat,channelList,btagSFTool,
 Wrapper to be used when run in parallel
 """
 def runPrepareTemplatesPacked(args):
-    sampleTag,tagger,taggerDef,sc,channelList,btagSFTool,inDir,outDir,expEffUrl in args
     try:
-        return prepareTemplates(sampleTag=sampleTag,
-                                tagger=tagger,
-                                taggerDef=taggerDef,
-                                sliceCat=sc,
-                                channelList=channelList,
-                                btagSFTool=btagSFTool,
-                                expEffUrl=expEffUrl,
-                                inDir=inDir,
-                                outDir=outDir)
+        return prepareTemplates(sampleTag=args[0],
+                                tagger=args[1],
+                                iop=args[2],
+                                taggerDef=args[3],
+                                sliceCat=args[4],
+                                channelList=args[5],
+                                btagSFTool=args[6],
+                                expEffUrl=args[7],
+                                inDir=args[8],
+                                outDir=args[9])
     except :
         print 50*'<'
         print "  Problem found (%s) baling out of this task" % sys.exc_info()[1]
@@ -279,21 +277,24 @@ def main():
             fOut.Close()
 
             for tagger,taggerDef in taggersList:
+                nOPs=len(taggerDef)-2
                 for sc in sliceCategs:
-                    task_list.append((sampleTag,tagger,taggerDef,sc,channelList,btagSFTool,opt.inDir,opt.outDir,opt.expEff))
-    
+                    for iop in xrange(1,nOPs):
+                        task_list.append((sampleTag,tagger,iop,taggerDef,sc,channelList,btagSFTool,opt.expEff,opt.inDir,opt.outDir))
+        print task_list
         print '%s jobs to run in %d parallel threads' % (len(task_list), opt.njobs)
         if opt.njobs == 0:
-            for sampleTag,tagger,taggerDef,sc,channelList,btagSFTool,inDir,outDir,expEffUrl in task_list:
-                prepareTemplates(sampleTag=sampleTag,
-                                 tagger=tagger,
-                                 taggerDef=taggerDef,
-                                 sliceCat=sc,
-                                 channelList=channelList,
-                                 btagSFTool=btagSFTool,
-                                 expEffUrl=expEffUrl,
-                                 inDir=inDir,
-                                 outDir=outDir)
+            for task in task_list:
+                prepareTemplates(sampleTag=task[0],
+                                 tagger=task[1],
+                                 iop=task[2],
+                                 taggerDef=task[3],
+                                 sliceCat=task[4],
+                                 channelList=task[5],
+                                 btagSFTool=task[6],
+                                 expEffUrl=task[7],
+                                 inDir=task[8],
+                                 outDir=task[9])
         else:
             from multiprocessing import Pool
             pool = Pool(opt.njobs)
