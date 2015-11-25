@@ -9,10 +9,15 @@ from array import array
 
 VARSTOFIT  = [('kindisc',-1,1),('close_mlj',0,250)]
 SLICEBINS  = {
-    'jetpt': [(30,50),(50,70),(70,100),(100,140),(140,200),(200,300)],
+    'jetpt': [(30,50),(50,70),(70,100),(100,140),(140,200)],
     'jeteta': [(-2.4,-1.1),(-1.1,1.1),(1.1,2.4)],
-    'npv': [(0,30),(0,7),(7,13),(13,16),(16,30)],
+    'npv': [(0,7),(7,13),(13,16),(16,30)],
     }
+SLICEVARTITLES={
+    'jetpt':'Transverse momentum [GeV]',
+    'jeteta':'Pseudo-rapidity',
+    'npv':'Primary vertex multiplicity'
+}
 SLICEVAR   = 'jetpt'
 SYSTVARS   = ['','jesup','jesdn','jerup','jerdn','trigdn','trigup','seldn','selup','qcdscaledn','qcdscaleup','hdampdn','hdampup','puup','pudn']
 
@@ -46,6 +51,11 @@ def prepareTemplates(tagger,taggerDef,var,varRange,channelList,inDir,outDir):
             for islice in xrange(0,len(SLICEBINS[SLICEVAR])):
                 for systVar in SYSTVARS:
                     if flav=='data' and len(systVar)>0 : continue
+
+                    if i==0:
+                        hkey='%s_slice%d_%s'%(flav,islice,systVar)
+                        histos[hkey]=ROOT.TH1F(hkey,';Discriminator;Jets',50,varRange[0],varRange[1])
+
                     for status in ['pass','fail']:
                         key='%s_%s%d_slice%d%s' % (flav, status, i, islice,systVar)
                         if i==0 and status=='fail': continue
@@ -126,15 +136,20 @@ def prepareTemplates(tagger,taggerDef,var,varRange,channelList,inDir,outDir):
                 
                 #fill the histos
                 normVarVal = ROOT.TMath.Min(varRange[1],ROOT.TMath.Max(varVal[0],varRange[0])) 
-                normVarVal += (varRange[1]-varRange[0])*(njets-2)
+                normVarValJetBins = normVarVal+ (varRange[1]-varRange[0])*(njets-2)
                 for islice in xrange(0,len(passSlice)):
                     if passSlice[islice]==0 : continue
+
+                    if njets==2:
+                        hkey='%s_slice%d_%s'%(flav,islice,systVar)
+                        histos[hkey].Fill(normVarVal,weight)
+
                     hkey='%s_pass0_slice%d%s'%(flav,islice,systVar)
                     histos[hkey].Fill(normVarVal,weight)
                     for iop in xrange(2,len(taggerDef)-1):
                         status='fail' if taggerVal[0]< taggerDef[iop] else 'pass'
                         hkey='%s_%s%d_slice%d%s'%(flav,status,iop-1,islice,systVar)
-                        histos[hkey].Fill(normVarVal,weight)
+                        histos[hkey].Fill(normVarValJetBins,weight)
 
                 #fill histo for data
                 if key=='data' : outT.Fill()
@@ -187,6 +202,7 @@ def runSFFits(var,tagger,taggerDef,lumi,outDir):
     #input file
     fIn=ROOT.TFile.Open('%s/%s_templates/%s.root' % (outDir, var, tagger) )
 
+    effMeasurements,effExpected,sfMeasurements,systUncs={},{},{},{}
     nOPs=len(taggerDef)-2
     for iop in xrange(1,nOPs):
 
@@ -229,9 +245,9 @@ def runSFFits(var,tagger,taggerDef,lumi,outDir):
                             ihisto.Scale(lumi)
 
                             #only interested in shape variations
-                            #hnomname='%s_%s%s'%(flav,status,baseNameNominal)
-                            #inomhisto=fIn.Get(hnomname)
-                            #ihisto.Scale(inomhisto.Integral()/ihisto.Integral())
+                            hnomname='%s_%s%s'%(flav,status,baseNameNominal)
+                            inomhisto=fIn.Get(hnomname)
+                            ihisto.Scale(inomhisto.Integral()/ihisto.Integral())
 
                             if not status in flavTemplates:
                                 flavTemplates[status]=ihisto.Clone(name)        
@@ -256,17 +272,30 @@ def runSFFits(var,tagger,taggerDef,lumi,outDir):
 
 
                 #fit
+                if not iop in effMeasurements:
+                    effMeasurements[iop]={}
+                    sfMeasurements[iop]={}
+                    effExpected[iop]={}
+                    systUncs[iop]={}
+                if not islice in systUncs[iop]: systUncs[iop][islice]={}
+
                 saveResultIn = ROOT.TString('%s/%s_templates/%s_%s'%(outDir,var,tagger,baseName) if syst=='' else '')
                 if len(syst)==0:
                     res=ttFracFitter.fit(mc['pass'],data['pass'],mc['fail'],data['fail'],0,saveResultIn,lumi/1000.)
-                #    #bobs[iop][islice]['']=(res.nObs,res.nObsUnc)
-                    #bexp[iop][islice]=(res.nExp,res.nExpUnc)
-                    #res=ttFracFitter.fit(mc,pseudoData,0,'')
-                    #bobs[iop][islice]['closureup']=(res.nObs,res.nObsUnc)
-                    #bobs[iop][islice]['closuredn']=(res.nObs,res.nObsUnc)
-                #else:
-                #    res=ttFracFitter.fit(mc,pseudoData,0,saveResultIn)
-                #    bobs[iop][islice][syst]=(res.nObs,res.nObsUnc)
+                    sfMeasurements[iop][islice]=(res.sf,res.sfUnc)
+                    effMeasurements[iop][islice]=(res.eff,res.effUnc)
+                    effExpected[iop][islice]=(res.effExp,res.effExpUnc)
+
+                    res=ttFracFitter.fit(mc['pass'],pseudoData['pass'],mc['fail'],pseudoData['fail'],0)
+                    systUncs[iop][islice]['closureup']=ROOT.TMath.Abs(res.sf-1.0)
+                    systUncs[iop][islice]['closuredn']=systUncs[iop][islice]['closureup']
+                else:
+                    #saveResultIn=ROOT.TString('%s/%s_templates/%s_%s_%s'%(outDir,var,tagger,baseName,syst))
+                    #res=ttFracFitter.fit(mc['pass'],pseudoData['pass'],mc['fail'],pseudoData['fail'],0,saveResultIn,lumi/1000.)
+                    #systUncs[iop][islice][syst]=res.sf-1.0
+
+                    res=ttFracFitter.fit(mc['pass'],data['pass'],mc['fail'],data['fail'],0)
+                    systUncs[iop][islice][syst]=res.sf-sfMeasurements[iop][islice][0]
 
     #all fits done
     fIn.Close()
@@ -276,8 +305,10 @@ def runSFFits(var,tagger,taggerDef,lumi,outDir):
     cachefile = open(cache,'w')
     fitInfo={'var':var,'tagger':tagger,'taggerDef':taggerDef,'slicevar':SLICEVAR,'slicebins':SLICEBINS[SLICEVAR]}
     pickle.dump(fitInfo, cachefile,pickle.HIGHEST_PROTOCOL)
-    #pickle.dump(bobs, cachefile, pickle.HIGHEST_PROTOCOL)
-    #pickle.dump(bexp, cachefile, pickle.HIGHEST_PROTOCOL)
+    pickle.dump(effExpected, cachefile, pickle.HIGHEST_PROTOCOL)
+    pickle.dump(effMeasurements, cachefile, pickle.HIGHEST_PROTOCOL)
+    pickle.dump(sfMeasurements, cachefile, pickle.HIGHEST_PROTOCOL)
+    pickle.dump(systUncs, cachefile, pickle.HIGHEST_PROTOCOL)
     cachefile.close()
     print 'Fit results have been stored in %s'%cache
     

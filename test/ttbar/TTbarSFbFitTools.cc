@@ -58,9 +58,15 @@ TTbarFracFitterResult_t TTbarFracFitter::fit(TObjArray &expTemplates, TH1F *data
 
   //total events expected
   Float_t totalExp(0);
+  std::vector<Float_t> nExp,nExpUnc;
   for(int i=0; i<expTemplates.GetEntriesFast(); i++)
-    totalExp += ((TH1 *)expTemplates.At(i))->Integral();
-
+    {
+      TH1 *h=((TH1 *)expTemplates.At(i));
+      Double_t unc(0);
+      nExp[i]=h->IntegralAndError(1,h->GetNbinsX(),unc);
+      nExpUnc[i]=unc;
+      totalExp += nExp[i];
+    }
   //build the pdf components
   RooArgSet expPDFs,expFracs,nonPOIPDFs;
   TString poiName("v"); poiName+=idxOfInterest;
@@ -69,19 +75,10 @@ TTbarFracFitterResult_t TTbarFracFitter::fit(TObjArray &expTemplates, TH1F *data
       TH1 *h=(TH1 *)expTemplates.At(i);
       TString title(h->GetTitle());
       TString name("v"); name+= i;
-
-      //expected yields for parameter of interest
-      Double_t nExpUnc(0);
-      float nExp=h->IntegralAndError(1,h->GetXaxis()->GetNbins(),nExpUnc);
-      if(name==poiName)
-	{
-	  result.nExp = nExp;
-	  result.nExpUnc = nExpUnc;
-	}
-      
+     
       if(i<(expTemplates.GetEntriesFast()-1))
 	{
-	  float frac(nExp/totalExp);
+	  float frac(nExp[i]/totalExp);
 	  RooRealVar *fracVar = new RooRealVar(name,name,frac,0.5*frac,TMath::Min((float)1.0,(float)2*frac));
 	  fracVar->SetTitle(title);
 	  expFracs.add(*fracVar);
@@ -110,11 +107,16 @@ TTbarFracFitterResult_t TTbarFracFitter::fit(TObjArray &expTemplates, TH1F *data
 
   //save result
   RooRealVar *fracVar=(RooRealVar *)expFracs.find(poiName);
-  result.nObs    = fracVar->getVal()*totalExp;
-  result.nObsUnc = fracVar->getError()*totalExp;     
-  result.sf      = result.nExp<=0 ? -1 : result.nObs/result.nExp;
-  result.sfUnc   = result.nExp<=0 ? -1 : TMath::Sqrt(TMath::Power(result.nObs*result.nExpUnc,2)+TMath::Power(result.nObsUnc*result.nExp,2))/TMath::Power(result.nExp,2);
-  
+
+  result.effExp=nExp[idxOfInterest]/totalExp;
+  result.effExpUnc=nExpUnc[idxOfInterest]/totalExp;
+  Float_t nObs    = fracVar->getVal()*totalExp;
+  Float_t nObsUnc = fracVar->getError()*totalExp;  
+  result.sf      = nObs/nExp[idxOfInterest];
+  result.sfUnc   = TMath::Sqrt(TMath::Power(nObs*nExpUnc[idxOfInterest],2)+TMath::Power(nObsUnc*nExp[idxOfInterest],2))/TMath::Power(nExp[idxOfInterest],2);
+  result.eff=result.sf*result.effExp;
+  result.effUnc=result.sfUnc*result.effExp;
+
   //
   if(saveResultIn!="")
     {
@@ -259,16 +261,20 @@ TTbarFracFitterResult_t TTbarFracFitter::fit(TObjArray &passTemplates, TH1F *pas
 
   //compute the expected efficiency
   std::vector<float> expEff(passTemplates.GetEntriesFast(),0.);
+  std::vector<float> expEffUnc(passTemplates.GetEntriesFast(),0.);
   for(int i=0; i<passTemplates.GetEntriesFast(); i++)
     {
       TH1 *passH=(TH1 *)passTemplates.At(i);
       TH1 *failH=(TH1 *)failTemplates.At(i);
       if(passH==0 || failH==0) continue;
 
-      Float_t nPass(passH->Integral()), nFail(failH->Integral());
-      if(nPass+nFail==0) continue;
+      Double_t nPassUnc(0);
+      Float_t nPass(passH->IntegralAndError(1,passH->GetNbinsX(),nPassUnc)), nFail(failH->Integral());
+      Float_t total(nPass+nFail);
+      if(total==0) continue;
 
-      expEff[i]=nPass/(nPass+nFail);
+      expEff[i]=nPass/total;
+      expEffUnc[i]=nPassUnc/total;
     }
  
   RooArgSet passPDFs,passCounts,passNonPOIPDFs,failPDFs,failCounts,sfVars,failNonPOIPDFs;
@@ -310,7 +316,7 @@ TTbarFracFitterResult_t TTbarFracFitter::fit(TObjArray &passTemplates, TH1F *pas
       nExp=h->Integral();      
       RooFormulaVar *nFailFormulaVar = new RooFormulaVar(name,
 							 Form("@1*%f >=0 ? @0*(1-@1*%f)/(@1*%f) : 0",expEff[i],expEff[i],expEff[i]),
-							 RooArgSet(*npassVar,*sfVar)
+							 RooArgSet(*npassFormulaVar,*sfVar)
 							 );
       failCounts.add( *nFailFormulaVar );
       itempl = new RooDataHist(name+"_hist",name+"_hist", RooArgList(x), Import(*h));
@@ -338,10 +344,12 @@ TTbarFracFitterResult_t TTbarFracFitter::fit(TObjArray &passTemplates, TH1F *pas
   result.minuitStatus = minuit.minos(poi);
   
   //save result
-  result.nObs    = 0;
-  result.nObsUnc = 0;
-  result.sf      = sfVar->getVal();
-  result.sfUnc   = sfVar->getError();
+  result.effExp    = expEff[idxOfInterest];
+  result.effExpUnc = expEffUnc[idxOfInterest];
+  result.sf        = sfVar->getVal();
+  result.sfUnc     = sfVar->getError();
+  result.eff       = result.sf*result.effExp;
+  result.effUnc    = TMath::Sqrt( TMath::Power(result.sfUnc*result.effExp,2)+TMath::Power(result.sf*result.effExpUnc,2) );
   
   //
   if(saveResultIn!="")

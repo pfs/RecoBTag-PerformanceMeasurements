@@ -6,6 +6,7 @@ import math
 
 from rounding import *
 
+SYSTCOLORS=[ROOT.kMagenta, ROOT.kRed+1, ROOT.kMagenta+2, ROOT.kAzure+7, ROOT.kMagenta-9, ROOT.kBlue-7]
 
 """
 A wrapper to store data and MC histograms for comparison
@@ -15,6 +16,7 @@ class Plot(object):
     def __init__(self,name):
         self.name = name
         self.mc = {}
+        self.mcsyst = {}
         self.dataH = None
         self.data = None
         self._garbageList = []
@@ -22,7 +24,7 @@ class Plot(object):
         self.savelog = False
         self.ratiorange = (0.46,1.54)
 
-    def add(self, h, title, color, isData):
+    def add(self, h, title, color, isData,isSyst):
         h.SetTitle(title)
         if isData:
             try:
@@ -39,19 +41,34 @@ class Plot(object):
                 self.dataH.SetFillStyle(0)
                 self._garbageList.append(h)
         else:
-            try:
-                self.mc[title].Add(h)
-            except:
-                self.mc[title]=h
-                self.mc[title].SetName('%s_%s' % (self.mc[title].GetName(), title ) )
-                self.mc[title].SetDirectory(0)
-                self.mc[title].SetMarkerStyle(1)
-                self.mc[title].SetMarkerColor(color)
-                self.mc[title].SetLineColor(ROOT.kBlack)
-                self.mc[title].SetLineWidth(1)
-                self.mc[title].SetFillColor(color)
-                self.mc[title].SetFillStyle(1001)
-                self._garbageList.append(h)
+            if isSyst:
+                try:
+                    self.mcsyst[title].Add(h)
+                except:
+                    self.mcsyst[title]=h
+                    self.mcsyst[title].SetName('%s_%s' % (self.mcsyst[title].GetName(), title ) )
+                    self.mcsyst[title].SetDirectory(0)
+                    self.mcsyst[title].SetMarkerStyle(1)
+                    self.mcsyst[title].SetMarkerColor(color)
+                    self.mcsyst[title].SetLineColor(ROOT.kBlack)
+                    self.mcsyst[title].SetLineWidth(1)
+                    self.mcsyst[title].SetFillColor(color)
+                    self.mcsyst[title].SetFillStyle(1001)
+                    self._garbageList.append(h)
+            else:
+                try:
+                    self.mc[title].Add(h)
+                except:
+                    self.mc[title]=h
+                    self.mc[title].SetName('%s_%s' % (self.mc[title].GetName(), title ) )
+                    self.mc[title].SetDirectory(0)
+                    self.mc[title].SetMarkerStyle(1)
+                    self.mc[title].SetMarkerColor(color)
+                    self.mc[title].SetLineColor(ROOT.kBlack)
+                    self.mc[title].SetLineWidth(1)
+                    self.mc[title].SetFillColor(color)
+                    self.mc[title].SetFillStyle(1001)
+                    self._garbageList.append(h)
 
     def finalize(self):
         self.data = convertToPoissonErrorGr(self.dataH)
@@ -92,6 +109,7 @@ class Plot(object):
         c.SetTopMargin(0)
         c.SetRightMargin(0.00)
 
+
         #holds the main plot
         c.cd()
         p1 = ROOT.TPad('p1','p1',0.0,0.85,1.0,0.0)
@@ -126,16 +144,34 @@ class Plot(object):
         leg.SetNColumns(ROOT.TMath.Min(nlegCols/2,3))
 
         # Build the stack to plot from all backgrounds
-        totalMC = None
+        totalMC,nominalTTbar = None,None
         stack = ROOT.THStack('mc','mc')
         for h in self.mc:
-            stack.Add(self.mc[h],'hist')
+            stack.Add(self.mc[h],'hist')            
             try:
                 totalMC.Add(self.mc[h])
             except:
                 totalMC = self.mc[h].Clone('totalmc')
                 self._garbageList.append(totalMC)
                 totalMC.SetDirectory(0)
+            if h=='t#bar{t}': 
+                nominalTTbar= self.mc[h].Clone('nomttbar')
+                self._garbageList.append(nominalTTbar)
+                nominalTTbar.SetDirectory(0)
+
+        systVariations=[]
+        for hname in self.mcsyst:
+            systvarH=totalMC.Clone('syst%d'%len(systVariations))
+            self._garbageList.append(systvarH)
+            systvarH.SetDirectory(0)
+            systvarH.Add(nominalTTbar,-1)
+            self.mcsyst[hname].Scale(lumi)
+            systvarH.Add(self.mcsyst[hname])
+            htitle=hname.replace('t#bar{t} ','')
+            systvarH.SetTitle(htitle)
+            systVariations.append( systvarH )
+        totalMC.SetTitle('default')
+        systVariations.append(totalMC)
 
         frame = totalMC.Clone('frame') if totalMC is not None else self.dataH.Clone('frame')
         frame.Reset('ICE')
@@ -164,9 +200,9 @@ class Plot(object):
         txt.SetTextSize(16)
         txt.SetTextAlign(12)
         if lumi<100:
-            txt.DrawLatex(0.18,0.95,'#bf{CMS} #it{Preliminary} %3.1f pb^{-1} (13 TeV)' % (lumi) )
+            txt.DrawLatex(0.18,0.95,'#bf{CMS} #it{preliminary} %3.1f pb^{-1} (13 TeV)' % (lumi) )
         else:
-            txt.DrawLatex(0.18,0.95,'#bf{CMS} #it{Preliminary} %3.1f fb^{-1} (13 TeV)' % (lumi/1000.) )
+            txt.DrawLatex(0.18,0.95,'#bf{CMS} #it{preliminary} %3.1f fb^{-1} (13 TeV)' % (lumi/1000.) )
 
         #holds the ratio
         c.cd()
@@ -193,20 +229,45 @@ class Plot(object):
         ratioframe.GetXaxis().SetTitleOffset(0)
         ratioframe.Draw()
 
-        try:
-            ratio=self.dataH.Clone('ratio')
-            ratio.SetDirectory(0)
-            self._garbageList.append(ratio)
-            ratio.Divide(totalMC)
-            gr=ROOT.TGraphAsymmErrors(ratio)
-            gr.SetMarkerStyle(self.data.GetMarkerStyle())
-            gr.SetMarkerSize(self.data.GetMarkerSize())
-            gr.SetMarkerColor(self.data.GetMarkerColor())
-            gr.SetLineColor(self.data.GetLineColor())
-            gr.SetLineWidth(self.data.GetLineWidth())
-            gr.Draw('p')
+        leg2 = ROOT.TLegend(0.15,0.85,0.95,0.75)
+        leg2.SetBorderSize(0)
+        leg2.SetFillStyle(1001)
+        leg2.SetFillColor(0)
+        leg2.SetTextFont(43)
+        leg2.SetTextSize(10)
+
+        allGrs=[]
+        try:            
+            for igr in xrange(0,len(systVariations)):
+                ratio=self.dataH.Clone('ratio')
+                ratio.SetDirectory(0)
+                self._garbageList.append(ratio)
+                ratio.Divide(systVariations[igr])
+                allGrs.append( ROOT.TGraphAsymmErrors(ratio) )
+                allGrs[-1].SetTitle(systVariations[igr].GetTitle())
+                allGrs[-1].SetName('ratio%d'%igr)
+                if igr==len(systVariations)-1:
+                    allGrs[-1].SetMarkerStyle(self.data.GetMarkerStyle())
+                    allGrs[-1].SetMarkerSize(self.data.GetMarkerSize())
+                    allGrs[-1].SetMarkerColor(self.data.GetMarkerColor())
+                    allGrs[-1].SetLineColor(self.data.GetLineColor())
+                    allGrs[-1].SetLineWidth(self.data.GetLineWidth())
+                    allGrs[-1].Draw('p')
+                    leg2.AddEntry(allGrs[-1],allGrs[-1].GetTitle(),'p')
+                else:
+                    allGrs[-1].SetMarkerStyle(1)
+                    allGrs[-1].SetMarkerSize(1)
+                    allGrs[-1].SetMarkerColor(SYSTCOLORS[igr])
+                    allGrs[-1].SetLineColor(SYSTCOLORS[igr])
+                    allGrs[-1].SetLineStyle(1+igr%2)
+                    allGrs[-1].SetLineWidth(2)
+                    allGrs[-1].Draw('lX')
+                    leg2.AddEntry(allGrs[-1],allGrs[-1].GetTitle(),'l')
         except:
             pass
+
+        leg2.SetNColumns(len(allGrs))
+        leg2.Draw()
 
         #all done
         c.cd()
@@ -318,6 +379,7 @@ def main():
     usage = 'usage: %prog [options]'
     parser = optparse.OptionParser(usage)
     parser.add_option('-j', '--json',        dest='json'  ,      help='json with list of files',        default=None,    type='string')
+    parser.add_option(      '--systJson',    dest='systJson',    help='json with list of systematics',  default=None,    type='string')
     parser.add_option('-i', '--inDir',       dest='inDir' ,      help='input directory',                default=None,    type='string')
     parser.add_option(      '--saveLog',     dest='saveLog' ,    help='save log versions of the plots', default=False,   action='store_true')
     parser.add_option(      '--silent',      dest='silent' ,     help='only dump to ROOT file',         default=False,   action='store_true')
@@ -331,27 +393,41 @@ def main():
     jsonFile = open(opt.json,'r')
     samplesList=json.load(jsonFile,encoding='utf-8').items()
     jsonFile.close()
+    systSamplesList=None
+    if opt.systJson:
+        jsonFile = open(opt.systJson,'r')
+        systSamplesList=json.load(jsonFile,encoding='utf-8').items()
+        jsonFile.close()
 
     onlyList=opt.only.split(',')
 
     #read plots 
     plots={}
-    for tag,sample in samplesList: 
-        fIn=ROOT.TFile.Open('%s/%s.root' % ( opt.inDir, tag) )
-        try:
-            for tkey in fIn.GetListOfKeys():
-                key=tkey.GetName()
-                keep=False
-                for tag in onlyList: 
-                    if tag in key: keep=True
-                if not keep: continue
-                obj=fIn.Get(key)
-                if not obj.InheritsFrom('TH1') : continue
-                if not key in plots : plots[key]=Plot(key)
-                if opt.rebin>1:  obj.Rebin(opt.rebin)
-                plots[key].add(h=obj,title=sample[3],color=sample[4],isData=sample[1])
-        except:
-            print 'Skipping %s'%tag
+    for slist,isSyst in [(samplesList,False),(systSamplesList,True)]:
+
+        for tag,sample in slist: 
+
+            if isSyst and not 't#bar{t}' in sample[3] : continue
+
+            inDir=opt.inDir
+            if isSyst : inDir += '/syst'
+            fIn=ROOT.TFile.Open('%s/%s.root' % ( inDir, tag) )
+            try:
+                for tkey in fIn.GetListOfKeys():
+                    key=tkey.GetName()
+                    keep=False if len(onlyList)>0 else True
+                    for tag in onlyList :
+                        if tag in key: 
+                            keep=True
+                    if not keep: continue
+                    obj=fIn.Get(key)
+                    if not obj.InheritsFrom('TH1') : continue
+                    if not key in plots : plots[key]=Plot(key)
+                    if opt.rebin>1:  obj.Rebin(opt.rebin)
+                    plots[key].add(h=obj,title=sample[3],color=sample[4],isData=sample[1],isSyst=isSyst)
+            except:
+                print 'Skipping %s'%tag
+
 
     #show plots
     ROOT.gStyle.SetOptTitle(0)

@@ -9,7 +9,7 @@
 
 struct TTbarFracFitterResult_t
 {
-  float nExp,nExpUnc,nObs,nObsUnc,sf,sfUnc;
+  float eff,effUnc,sf,sfUnc,effExp,effExpUnc;
   int minuitStatus;
 };
 

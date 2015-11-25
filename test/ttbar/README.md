@@ -66,21 +66,30 @@ After running the local analysis use the kin tree stored in the ttbar sample to 
 The script compiles and runs KIN_trainClassifier.C which should be modified in case different trainings are required.
 ```
 python runTTbarAnalysis.py -i /store/group/phys_btag/performance/TTbar/2015_25ns/8622ee3  -j data/samples_Run2015_25ns.json --tmvaWgts data/KIN/ --dyScale analysis/plots/.dyScaleFactor.pck  -n 8
-python runTTbarAnalysis.py -i /store/group/phys_btag/performance/TTbar/2015_25ns/8622ee3  -j data/syst_samples_Run2015_25ns.json --tmvaWgts data/KIN/ --dyScale analysis/plots/.dyScaleFactor.pck  -n 8
+python runTTbarAnalysis.py -i /store/group/phys_btag/performance/TTbar/2015_25ns/8622ee3 -o analysis/syst -j data/syst_samples_Run2015_25ns.json --tmvaWgts data/KIN/ --dyScale analysis/plots/.dyScaleFactor.pck  -n 8
 ```
 Re-run the analysis to store the KIN discriminator value per jet
 ```
 a=(jetpt npv jeteta)
+recycleTemplates="--recycleTemplates"
 for i in ${a[@]}; do
-    python Templated_btagEffFitter.py -i analysis/ -o analysis_ll/${i}  -t data/taggers_Run2015_25ns.json -n 8 --channels -121,-169 -s ${i} &
-    python Templated_btagEffFitter.py -i analysis/ -o analysis_emu/${i} -t data/taggers_Run2015_25ns.json -n 8 --channels -143      -s ${i};
+    python Templated_btagEffFitter.py -i analysis/ -o analysis_ll/${i}  -t data/taggers_Run2015_25ns.json -n 8 --channels -121,-169 -s ${i} $recycleTemplates &
+    python Templated_btagEffFitter.py -i analysis/ -o analysis_emu/${i} -t data/taggers_Run2015_25ns.json -n 8 --channels -143      -s ${i} $recycleTemplates ;
 done
+for i in ${a[@]}; do
+    python Templated_btagEffFitter.py -i analysis/syst -o analysis_ll/${i}/syst  -t data/taggers_Run2015_25ns.json -n 8 --channels -121,-169 -s ${i} $recycleTemplates &
+    python Templated_btagEffFitter.py -i analysis/syst -o analysis_emu/${i}/syst -t data/taggers_Run2015_25ns.json -n 8 --channels -143      -s ${i} $recycleTemplates ;
+done
+
 ```
 Runs the fits to the templates to determine the scale factors. Valid for KIN, Mlj, JP, others one may wish to add.
 The base procedure is similar for all. The first time to run will take a long time as templates need to be created.
 If templates are stable and only fits need to be redone when can run with the option "--recycleTemplates"
 ```
-python createSFbSummaryReport.py -i analysis/kindisc_templates/.csv_fits.pck -o csv_fits.tex
+taggers=(csv jp svhe)
+for t in ${taggers[@]}; do
+    python createSFbSummaryReport.py -i "KIN (ll)":analysis_ll/jetpt/kindisc_templates/.${t}_fits.pck,"KIN (emu)":analysis_emu/jetpt/kindisc_templates/.${t}_fits.pck,"KIN (ll)":analysis_ll/jeteta/kindisc_templates/.${t}_fits.pck,"KIN (emu)":analysis_emu/jeteta/kindisc_templates/.${t}_fits.pck,"KIN (ll)":analysis_ll/npv/kindisc_templates/.${t}_fits.pck,"KIN (emu)":analysis_emu/npv/kindisc_templates/.${t}_fits.pck,"M(lb) (ll)":analysis_ll/jetpt/close_mlj_templates/.${t}_fits.pck,"M(lb) (emu)":analysis_emu/jetpt/close_mlj_templates/.${t}_fits.pck,"M(lb) (ll)":analysis_ll/jeteta/close_mlj_templates/.${t}_fits.pck,"M(lb) (emu)":analysis_emu/jeteta/close_mlj_templates/.${t}_fits.pck,"M(lb) (ll)":analysis_ll/npv/close_mlj_templates/.${t}_fits.pck,"M(lb) (emu)":analysis_emu/npv/close_mlj_templates/.${t}_fits.pck -o ${t}_fits;
+done
 ```
 Parses the fit results and creates a TeX file with the tables as well as the plots with the measured efficiencies.
 ```
