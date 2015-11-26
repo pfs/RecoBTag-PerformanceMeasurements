@@ -6,20 +6,19 @@ import ROOT
 import pickle
 from plotter import Plot
 
+from Templated_btagEffFitter import SLICEBINS, SLICEVAR
+
 RELTAGEFFVAR  = 0.5
 JETMULTCATEGS = [2,3,4]
-SLICEBINS  = [(30,300),(30,50),(50,70),(70,100),(150,200),(200,300)]
-SLICEVAR   = 'jetpt'
-#SLICEBINS  = [(0,30),(0,7),(7,13),(13,16),(16,30)]
-#SLICEVAR   = 'npv'
+
 
 SYSTVARS      = ['nom',
-                 'jesup','jesdn',
+                 #'jesup','jesdn',
                  #'jerup','jerdn',
                  #'puup','pudn',
                  #'trigup','trigdn',
                  #'selup','seldn',
-                 'qcdscaledn','qcdscaleup',
+                 #'qcdscaledn','qcdscaleup',
                  #'hdampdn','hdampup'                
                  ]
 
@@ -33,16 +32,18 @@ def prepareTemplates(sampleTag,tagger,iop,taggerDef,sliceCat,channelList,btagSFT
     #prepare task systematics and tag counting
     tagCounting={'nom':0}
     TASKSYSTVARS=SYSTVARS[:]
+    #for idx in effCategs:
+    #    for eff in ['beff','ceff','leff']:
+    #        for sign in ['up','dn']:
+    #            TASKSYSTVARS.append( '%s%d%s'%(eff,idx,sign) )
+    #            tagCounting['%s%d%s'%(eff,idx,sign)]=0
+
+    #efficiency categories
     effCategs=[0]
     effCategs.append(sliceCat[0]+1)
     if sliceCat[0]!=sliceCat[1]:
-        effCategs.append(sliceCat[1]+1)
-    for idx in effCategs:
-        for eff in ['beff','ceff','leff']:
-            for sign in ['Up','Down']:
-                TASKSYSTVARS.append( '%s%d%s'%(eff,idx,sign) )
-                tagCounting['%s%d%s'%(eff,idx,sign)]=0
-        
+        effCategs.append(sliceCat[1]+1)        
+
     #prepare histograms
     histos={}
     nJetMultCategs=len(JETMULTCATEGS)
@@ -58,9 +59,12 @@ def prepareTemplates(sampleTag,tagger,iop,taggerDef,sliceCat,channelList,btagSFT
         histos[name].SetDirectory(0)
 
     #report
+    sliceVarMin=(SLICEBINS[SLICEVAR][sliceCat[0]][0],SLICEBINS[SLICEVAR][sliceCat[1]][0])
+    sliceVarMax=(SLICEBINS[SLICEVAR][sliceCat[0]][1],SLICEBINS[SLICEVAR][sliceCat[1]][1])
+
     print '...starting %s for category %3.0f to %3.0f / %3.0f to %3.0f with wp=%d'%(tagger,
-                                                                                    SLICEBINS[sliceCat[0]][0],SLICEBINS[sliceCat[0]][1],
-                                                                                    SLICEBINS[sliceCat[1]][0],SLICEBINS[sliceCat[1]][1],
+                                                                                    sliceVarMin[0],sliceVarMax[0],
+                                                                                    sliceVarMin[1],sliceVarMax[1],
                                                                                     iop)
     print '   base name is %s'%baseName
     print '   task systematics are',TASKSYSTVARS
@@ -96,15 +100,20 @@ def prepareTemplates(sampleTag,tagger,iop,taggerDef,sliceCat,channelList,btagSFT
         #check if jets are in required category
         sliceVarVal1=getattr(chain,SLICEVAR)[0]
         sliceVarVal2=getattr(chain,SLICEVAR)[1]
+
+        #jet categories
         jetCats=[-1,-1]
-        if sliceVarVal1>SLICEBINS[sliceCat[0]][0] and sliceVarVal1<SLICEBINS[sliceCat[0]][1]:
+        if sliceVarVal1>sliceVarMin[0] and sliceVarVal1<sliceVarMax[0]:
             jetCats[0]=sliceCat[0]+1
-            if sliceVarVal2>SLICEBINS[sliceCat[1]][0] and sliceVarVal2<SLICEBINS[sliceCat[1]][1]:
+            if sliceVarVal2>sliceVarMin[1] and sliceVarVal2<sliceVarMax[1]:
                 jetCats[1]=sliceCat[1]+1
-        if sliceVarVal1>SLICEBINS[sliceCat[1]][0] and sliceVarVal1<SLICEBINS[sliceCat[1]][1]:
+
+        if sliceVarVal1>sliceVarMin[1] and sliceVarVal1<sliceVarMax[1]:
             jetCats[0]=sliceCat[1]+1
-            if sliceVarVal2>SLICEBINS[sliceCat[0]][0] and sliceVarVal2<SLICEBINS[sliceCat[0]][1]:
+            if sliceVarVal2>sliceVarMin[0] and sliceVarVal2<sliceVarMax[0]:
                 jetCats[1]=sliceCat[0]+1
+
+        #check if jets can be both fit into the required category
         if jetCats[0]<0 or jetCats[1]<0: continue
                 
         #reset tag counters
@@ -134,31 +143,31 @@ def prepareTemplates(sampleTag,tagger,iop,taggerDef,sliceCat,channelList,btagSFT
                 pass
                 
             passTag = False if taggerVal<taggerDef[iop+1] else True
-            tagCounting['nom' ] += int(passTag)
+            tagCounting['nom'] += int(passTag)
                     
-            passTagBeffUp,passTagBeffDown = passTag,passTag
-            if flav==5:
-                passTagBeffUp=btagSFTool.modifyBTagsWithSF(passTagBeffUp,1.0*(1+RELTAGEFFVAR),expEff)
-                passTagBeffDown=btagSFTool.modifyBTagsWithSF(passTagBeffDown,1.0*(1-RELTAGEFFVAR),expEff)
-            for idx in effCategs:
-                tagCounting['beff%dUp'%idx] += int(passTagBeffUp)
-                tagCounting['beff%dDown'%idx] += int(passTagBeffDown)
-
-            passTagCeffUp,passTagCeffDown = passTag,passTag
-            if flav==4:
-                passTagCeffUp=btagSFTool.modifyBTagsWithSF(passTagCeffUp,1.0*(1+RELTAGEFFVAR),expEff)
-                passTagCeffDown=btagSFTool.modifyBTagsWithSF(passTagCeffDown,1.0*(1-RELTAGEFFVAR),expEff)
-            for idx in effCategs:
-                tagCounting['ceff%dUp'%idx] += int(passTagCeffUp)
-                tagCounting['ceff%dDown'%idx] += int(passTagCeffDown)
-
-            passTagLeffUp,passTagLeffDown = passTag,passTag
-            if flav!=4 and flav!=5:
-                passTagLeffUp=btagSFTool.modifyBTagsWithSF(passTagLeffUp,1.0*(1+RELTAGEFFVAR),expEff)
-                passTagLeffDown=btagSFTool.modifyBTagsWithSF(passTagLeffDown,1.0*(1-RELTAGEFFVAR),expEff)
-            for idx in effCategs:
-                tagCounting['leff%dUp'%idx] += int(passTagLeffUp)
-                tagCounting['leff%dDown'%idx] += int(passTagLeffDown)
+            #passTagBeffUp,passTagBeffDown = passTag,passTag
+            #if flav==5:
+            #    passTagBeffUp=btagSFTool.modifyBTagsWithSF(passTagBeffUp,1.0*(1+RELTAGEFFVAR),expEff)
+            #    passTagBeffDown=btagSFTool.modifyBTagsWithSF(passTagBeffDown,1.0*(1-RELTAGEFFVAR),expEff)
+            #for idx in effCategs:
+            #    tagCounting['beff%dUp'%idx] += int(passTagBeffUp)
+            #    tagCounting['beff%dDown'%idx] += int(passTagBeffDown)
+            #
+            #passTagCeffUp,passTagCeffDown = passTag,passTag
+            #if flav==4:
+            #    passTagCeffUp=btagSFTool.modifyBTagsWithSF(passTagCeffUp,1.0*(1+RELTAGEFFVAR),expEff)
+            #    passTagCeffDown=btagSFTool.modifyBTagsWithSF(passTagCeffDown,1.0*(1-RELTAGEFFVAR),expEff)
+            #for idx in effCategs:
+            #    tagCounting['ceff%dUp'%idx] += int(passTagCeffUp)
+            #    tagCounting['ceff%dDown'%idx] += int(passTagCeffDown)
+            #
+            #passTagLeffUp,passTagLeffDown = passTag,passTag
+            #if flav!=4 and flav!=5:
+            #    passTagLeffUp=btagSFTool.modifyBTagsWithSF(passTagLeffUp,1.0*(1+RELTAGEFFVAR),expEff)
+            #    passTagLeffDown=btagSFTool.modifyBTagsWithSF(passTagLeffDown,1.0*(1-RELTAGEFFVAR),expEff)
+            #for idx in effCategs:
+            #    tagCounting['leff%dUp'%idx] += int(passTagLeffUp)
+            #    tagCounting['leff%dDown'%idx] += int(passTagLeffDown)
 
         #print sliceVarVal1,sliceVarVal2,'->',effCategs
         #print 'Flavours:',chain.flavour[0],chain.flavour[1]

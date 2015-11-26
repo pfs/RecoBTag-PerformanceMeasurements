@@ -229,12 +229,14 @@ class Plot(object):
         ratioframe.GetXaxis().SetTitleOffset(0)
         ratioframe.Draw()
 
-        leg2 = ROOT.TLegend(0.15,0.85,0.95,0.75)
-        leg2.SetBorderSize(0)
-        leg2.SetFillStyle(1001)
-        leg2.SetFillColor(0)
-        leg2.SetTextFont(43)
-        leg2.SetTextSize(10)
+        leg2=None
+        if len(systVariations)>1:
+            leg2 = ROOT.TLegend(0.15,0.85,0.95,0.75)
+            leg2.SetBorderSize(0)
+            leg2.SetFillStyle(1001)
+            leg2.SetFillColor(0)
+            leg2.SetTextFont(43)
+            leg2.SetTextSize(10)
 
         allGrs=[]
         try:            
@@ -253,7 +255,7 @@ class Plot(object):
                     allGrs[-1].SetLineColor(self.data.GetLineColor())
                     allGrs[-1].SetLineWidth(self.data.GetLineWidth())
                     allGrs[-1].Draw('p')
-                    leg2.AddEntry(allGrs[-1],allGrs[-1].GetTitle(),'p')
+                    if leg2 : leg2.AddEntry(allGrs[-1],allGrs[-1].GetTitle(),'p')
                 else:
                     allGrs[-1].SetMarkerStyle(1)
                     allGrs[-1].SetMarkerSize(1)
@@ -262,12 +264,13 @@ class Plot(object):
                     allGrs[-1].SetLineStyle(1+igr%2)
                     allGrs[-1].SetLineWidth(2)
                     allGrs[-1].Draw('lX')
-                    leg2.AddEntry(allGrs[-1],allGrs[-1].GetTitle(),'l')
+                    if leg2 : leg2.AddEntry(allGrs[-1],allGrs[-1].GetTitle(),'l')
         except:
             pass
 
-        leg2.SetNColumns(len(allGrs))
-        leg2.Draw()
+        if leg2:
+            leg2.SetNColumns(len(allGrs))
+            leg2.Draw()
 
         #all done
         c.cd()
@@ -404,7 +407,7 @@ def main():
     #read plots 
     plots={}
     for slist,isSyst in [(samplesList,False),(systSamplesList,True)]:
-
+        if slist is None : continue
         for tag,sample in slist: 
 
             if isSyst and not 't#bar{t}' in sample[3] : continue
