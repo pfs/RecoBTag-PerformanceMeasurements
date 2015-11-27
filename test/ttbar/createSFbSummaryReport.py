@@ -32,7 +32,7 @@ def addToSummaryGr(summaryGrs,val,valUnc,xmin,xmax,taggerName,summaryType,uncTyp
 """
 Parse pickle file
 """
-def buildSFbSummary(inF,title):
+def buildSFbSummary(inF,title,outDir):
 
     global SUMMARYCTR
     SUMMARYCTR+=1
@@ -49,6 +49,10 @@ def buildSFbSummary(inF,title):
     taggerDef=fitInfo['taggerDef']
     taggerName=fitInfo['tagger']
     nOPs=len(taggerDef)-2
+
+    # see https://twiki.cern.ch/twiki/bin/viewauth/CMS/BTagCalibration#Example_code_in_Python
+    sliceVarName=fitInfo['slicevar']
+    btvCalib = ROOT.BTagCalibration(title) if sliceVarName=='jetpt' else None
 
     #prepare graphs
     summaryGrs={}
@@ -101,6 +105,18 @@ def buildSFbSummary(inF,title):
             sfbSystUnc=math.sqrt(sfbSystUnc)
             sfbTotalUnc=math.sqrt(sfbStatUnc**2+sfbSystUnc**2)
             
+            #report
+            if sliceVarName=='jetpt':
+                btvCalibParams = ROOT.BTagEntry.Parameters(iop-1, title, 'central', 0, -2.4, 2.4, sliceVarMin,sliceVarMax,0,1)
+                entry = ROOT.BTagEntry(str(sfb),btvCalibParams)
+                btvCalib.addEntry(entry)
+                btvCalibParams = ROOT.BTagEntry.Parameters(iop-1, title, 'up', 0, -2.4, 2.4, sliceVarMin,sliceVarMax,0,1)
+                entry = ROOT.BTagEntry(str(sfb+sfbTotalUnc),btvCalibParams)
+                btvCalib.addEntry(entry)
+                btvCalibParams = ROOT.BTagEntry.Parameters(iop-1, title, 'down', 0, -2.4, 2.4, sliceVarMin,sliceVarMax,0,1)
+                entry = ROOT.BTagEntry(str(sfb+sfbTotalUnc),btvCalibParams)
+                btvCalib.addEntry(entry)
+
             #fill table rows
             tablePerOp[iop]=[('$\\varepsilon_{\\rm b}^{\\rm MC}$','%s'%toLatexRounded(effExp,effExpUnc)),
                              ('$\\varepsilon_{\\rm b}^{\\rm obs}$','%s'%toLatexRounded(effObs,effObsUnc)),
@@ -133,7 +149,11 @@ def buildSFbSummary(inF,title):
                 % (os.path.dirname(inF),taggerName,iop,islice)
                 ) )
 
-    return fitInfo['slicevar'],summaryGrs,table,plotsToInclude
+    #dump to file
+    if btvCalib:
+        with open('%s/%s_calib.csv'%(outDir,title), 'w') as f : f.write(btvCalib.makeCSV())
+
+    return sliceVarName,summaryGrs,table,plotsToInclude
 
 
 """
@@ -169,7 +189,7 @@ def produceSummaryFigures(sliceVar,summaryGr,output):
     p2.SetLeftMargin(0.12)
     p2.SetBottomMargin(0.2)
     p2.Draw()
-    
+
     firstKey=summaryGr.keys()[0]
     for iop in summaryGr[firstKey]:
 
@@ -182,6 +202,9 @@ def produceSummaryFigures(sliceVar,summaryGr,output):
         leg.SetTextFont(42)
         leg.SetTextSize(0.05)
         leg.SetHeader("#it{Methods}")
+
+        
+
         for uncType in ['total','stat']:
             drawOpt='2' if uncType=='total' else 'p'
             
@@ -335,13 +358,16 @@ def main():
     #prepare output
     os.system('mkdir -p %s'%opt.output)
 
+    os.system('ln -s $CMSSW_RELEASE_BASE/src/RecoBTag/PerformanceDB/test/BTagCalibrationStandalone.cc')
+    os.system('ln -s $CMSSW_RELEASE_BASE/src/RecoBTag/PerformanceDB/test/BTagCalibrationStandalone.h')
+    ROOT.gROOT.ProcessLine('.L BTagCalibrationStandalone.cc+')
 
     allInputs=opt.input.split(',')
     print allInputs
     summaryTable,summaryGr,plotsToInclude={},{},{}
     for line in allInputs:
         title,inF=line.split(':')        
-        sliceVar, effGrs, tables,plots = buildSFbSummary(inF,title)
+        sliceVar, effGrs, tables,plots = buildSFbSummary(inF,title,opt.output)
         if not sliceVar in summaryGr: 
             summaryGr[sliceVar]={}
             summaryTable[sliceVar]={}
