@@ -112,18 +112,18 @@ class Plot(object):
 
         #holds the main plot
         c.cd()
-        p1 = ROOT.TPad('p1','p1',0.0,0.85,1.0,0.0)
+        p1 = ROOT.TPad('p1','p1',0.0,0.2,1.0,1.0)
         p1.Draw()
-        p1.SetRightMargin(0.05)
-        p1.SetLeftMargin(0.12)
-        p1.SetTopMargin(0.01)
-        p1.SetBottomMargin(0.12)
-        p1.SetGridx(True)
+        p1.SetRightMargin(0.02)
+        p1.SetLeftMargin(0.15)
+        p1.SetTopMargin(0.07)
+        p1.SetBottomMargin(0.01)
+        #p1.SetGridx(True)
         self._garbageList.append(p1)
         p1.cd()
 
         # legend
-        leg = ROOT.TLegend(0.5, 0.85-0.02*max(len(self.mc)-2,0), 0.98, 0.9)        
+        leg = ROOT.TLegend(0.5, 0.85-0.03*max(len(self.mc)-2,0), 0.98, 0.9)        
         leg.SetBorderSize(0)
         leg.SetFillStyle(0)
         leg.SetTextFont(43)
@@ -146,6 +146,11 @@ class Plot(object):
         # Build the stack to plot from all backgrounds
         totalMC,nominalTTbar = None,None
         stack = ROOT.THStack('mc','mc')
+
+        #sorted(self.mc, key=lambda histo: histo.Integral())
+        from collections import OrderedDict
+        self.mc = OrderedDict(sorted(self.mc.items(), key=lambda t: t[1].Integral()))
+
         for h in self.mc:
             stack.Add(self.mc[h],'hist')            
             try:
@@ -183,9 +188,12 @@ class Plot(object):
         frame.GetYaxis().SetRangeUser(0.1,maxY*1.3)
         frame.SetDirectory(0)
         frame.Reset('ICE')
+        frame.GetYaxis().SetTitle( '%s / (%.g)' % (frame.GetYaxis().GetTitle(),frame.GetXaxis().GetBinWidth(1)) )
         self._garbageList.append(frame)
-        frame.GetYaxis().SetTitleSize(0.045)
-        frame.GetYaxis().SetLabelSize(0.04)
+        frame.GetYaxis().SetTitleSize(0.05)
+        frame.GetYaxis().SetLabelSize(0.045)
+        frame.GetXaxis().SetTitleSize(0.05)
+        frame.GetXaxis().SetLabelSize(0.045)
         frame.GetYaxis().SetNoExponent()
         frame.Draw()
         frame.GetYaxis().SetTitleOffset(1.3)
@@ -202,31 +210,35 @@ class Plot(object):
         if lumi<100:
             txt.DrawLatex(0.18,0.95,'#bf{CMS} #it{preliminary} %3.1f pb^{-1} (13 TeV)' % (lumi) )
         else:
-            txt.DrawLatex(0.18,0.95,'#bf{CMS} #it{preliminary} %3.1f fb^{-1} (13 TeV)' % (lumi/1000.) )
+            txt.DrawLatex(0.2,0.88,'#bf{CMS}')
+            txt.DrawLatex(0.2,0.83,'#it{Preliminary}')
+            txt.DrawLatex(0.67,0.97,'%3.1f fb^{-1} (13 TeV, 25ns)'%(lumi/1000.))
+            #txt.DrawLatex(0.18,0.95,'#bf{CMS} #it{preliminary} %3.1f fb^{-1} (13 TeV)' % (lumi/1000.) )
 
         #holds the ratio
         c.cd()
-        p2 = ROOT.TPad('p2','p2',0.0,0.85,1.0,1.0)
+        p2 = ROOT.TPad('p2','p2',0.0,0.0,1.0,0.2)
         p2.Draw()
-        p2.SetBottomMargin(0.01)
-        p2.SetRightMargin(0.05)
-        p2.SetLeftMargin(0.12)
-        p2.SetTopMargin(0.05)
-        p2.SetGridx(True)
-        p2.SetGridy(True)
+        p2.SetRightMargin(0.02)
+        p2.SetLeftMargin(0.15)
+        p2.SetTopMargin(0.01)
+        p2.SetBottomMargin(0.4)
+
+        #p2.SetGridx(True)
+        #p2.SetGridy(True)
         self._garbageList.append(p2)
         p2.cd()
         ratioframe=frame.Clone('ratioframe')
-        ratioframe.GetYaxis().SetTitle('Ratio')
+        ratioframe.GetYaxis().SetTitle('Data/MC')
         ratioframe.GetYaxis().SetRangeUser(self.ratiorange[0], self.ratiorange[1])
         self._garbageList.append(frame)
         ratioframe.GetYaxis().SetNdivisions(5)
         ratioframe.GetYaxis().SetLabelSize(0.18)        
         ratioframe.GetYaxis().SetTitleSize(0.2)
-        ratioframe.GetYaxis().SetTitleOffset(0.2)
-        ratioframe.GetXaxis().SetLabelSize(0)
-        ratioframe.GetXaxis().SetTitleSize(0)
-        ratioframe.GetXaxis().SetTitleOffset(0)
+        ratioframe.GetYaxis().SetTitleOffset(0.3)
+        ratioframe.GetXaxis().SetLabelSize(0.18)
+        ratioframe.GetXaxis().SetTitleSize(0.2)
+        ratioframe.GetXaxis().SetTitleOffset(0.8)
         ratioframe.Draw()
 
         leg2=None

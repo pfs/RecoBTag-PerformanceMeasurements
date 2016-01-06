@@ -56,6 +56,10 @@
 #include "DataFormats/TrackReco/interface/TrackFwd.h"
 #include "DataFormats/TrackingRecHit/interface/TrackingRecHit.h"
 #include "DataFormats/TrackingRecHit/interface/TrackingRecHitFwd.h"
+
+#include "DataFormats/HepMCCandidate/interface/GenParticleFwd.h"
+#include "DataFormats/HepMCCandidate/interface/GenParticle.h"
+
 #include "TH1F.h"
 #include "TH2F.h"
 #include "TFile.h"
@@ -1249,6 +1253,20 @@ void BTagAnalyzerT<IPTI,VTX>::analyze(const edm::Event& iEvent, const edm::Event
     edm::Handle<int> metfilterIn;
     iEvent.getByLabel(edm::InputTag("ttbarselectionproducer:topMETFilter"),metfilterIn);
     EventInfo.ttbar_metfilterWord=*metfilterIn;
+
+    int gctr(0);
+    edm::Handle<edm::View<reco::GenParticle> > selGen;
+    iEvent.getByLabel(ttbarproducer_,selGen);
+    for (size_t i = 0; i < selGen->size(); ++i)
+      {
+	const auto g = selGen->ptrAt(i);
+	EventInfo.ttbar_gpt[gctr] = g->pt();
+	EventInfo.ttbar_geta[gctr] = g->eta();
+	EventInfo.ttbar_gphi[gctr] = g->phi();	
+	EventInfo.ttbar_gm[gctr] = g->mass();
+	EventInfo.ttbar_gid[gctr] = g->pdgId();
+      }
+    EventInfo.ttbar_ng=gctr;
 
     int lctr(0);
     edm::Handle<edm::View<pat::Electron> > selElectrons;

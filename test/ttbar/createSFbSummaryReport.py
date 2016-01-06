@@ -110,12 +110,19 @@ def buildSFbSummary(inF,title,outDir):
                 btvCalibParams = ROOT.BTagEntry.Parameters(iop-1, title, 'central', 0, -2.4, 2.4, sliceVarMin,sliceVarMax,0,1)
                 entry = ROOT.BTagEntry(str(sfb),btvCalibParams)
                 btvCalib.addEntry(entry)
-                btvCalibParams = ROOT.BTagEntry.Parameters(iop-1, title, 'up', 0, -2.4, 2.4, sliceVarMin,sliceVarMax,0,1)
+                btvCalibParams = ROOT.BTagEntry.Parameters(iop-1, title, 'up_total', 0, -2.4, 2.4, sliceVarMin,sliceVarMax,0,1)
                 entry = ROOT.BTagEntry(str(sfb+sfbTotalUnc),btvCalibParams)
                 btvCalib.addEntry(entry)
-                btvCalibParams = ROOT.BTagEntry.Parameters(iop-1, title, 'down', 0, -2.4, 2.4, sliceVarMin,sliceVarMax,0,1)
-                entry = ROOT.BTagEntry(str(sfb+sfbTotalUnc),btvCalibParams)
+                btvCalibParams = ROOT.BTagEntry.Parameters(iop-1, title, 'down_total', 0, -2.4, 2.4, sliceVarMin,sliceVarMax,0,1)
+                entry = ROOT.BTagEntry(str(sfb-sfbTotalUnc),btvCalibParams)
                 btvCalib.addEntry(entry)
+                btvCalibParams = ROOT.BTagEntry.Parameters(iop-1, title, 'up_statistics', 0, -2.4, 2.4, sliceVarMin,sliceVarMax,0,1)
+                entry = ROOT.BTagEntry(str(sfb+sfbStatUnc),btvCalibParams)
+                btvCalib.addEntry(entry)
+                btvCalibParams = ROOT.BTagEntry.Parameters(iop-1, title, 'down_statistics', 0, -2.4, 2.4, sliceVarMin,sliceVarMax,0,1)
+                entry = ROOT.BTagEntry(str(sfb-sfbStatUnc),btvCalibParams)
+                btvCalib.addEntry(entry)
+
 
             #fill table rows
             tablePerOp[iop]=[('$\\varepsilon_{\\rm b}^{\\rm MC}$','%s'%toLatexRounded(effExp,effExpUnc)),
