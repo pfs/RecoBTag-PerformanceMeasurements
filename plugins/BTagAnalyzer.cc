@@ -1265,6 +1265,7 @@ void BTagAnalyzerT<IPTI,VTX>::analyze(const edm::Event& iEvent, const edm::Event
 	EventInfo.ttbar_gphi[gctr] = g->phi();	
 	EventInfo.ttbar_gm[gctr] = g->mass();
 	EventInfo.ttbar_gid[gctr] = g->pdgId();
+	gctr++;
       }
     EventInfo.ttbar_ng=gctr;
 
