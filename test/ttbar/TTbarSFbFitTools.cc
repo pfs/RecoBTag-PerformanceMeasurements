@@ -43,12 +43,12 @@ TTbarFracFitter::TTbarFracFitter()
 }
 
 //
-TTbarFracFitterResult_t TTbarFracFitter::fit(TObjArray &expTemplates, TH1F *dataH,Int_t idxOfInterest,TString saveResultIn)
+TTbarFracFitterResult_t TTbarFracFitter::simpleFit(TObjArray &expTemplates, TH1F *dataH,Int_t idxOfInterest,TString saveResultIn)
 {
   using namespace RooFit;
 
   TTbarFracFitterResult_t result; 
-  
+
   //variable to fit
   RooRealVar x("x",dataH->GetXaxis()->GetTitle(),dataH->GetXaxis()->GetXmin(),dataH->GetXaxis()->GetXmax());
   x.setBins(dataH->GetXaxis()->GetNbins());
@@ -63,10 +63,11 @@ TTbarFracFitterResult_t TTbarFracFitter::fit(TObjArray &expTemplates, TH1F *data
     {
       TH1 *h=((TH1 *)expTemplates.At(i));
       Double_t unc(0);
-      nExp[i]=h->IntegralAndError(1,h->GetNbinsX(),unc);
-      nExpUnc[i]=unc;
+      nExp.push_back( h->IntegralAndError(1,h->GetNbinsX(),unc) );
+      nExpUnc.push_back( unc );
       totalExp += nExp[i];
     }
+
   //build the pdf components
   RooArgSet expPDFs,expFracs,nonPOIPDFs;
   TString poiName("v"); poiName+=idxOfInterest;
@@ -92,7 +93,6 @@ TTbarFracFitterResult_t TTbarFracFitter::fit(TObjArray &expTemplates, TH1F *data
       if(i!=idxOfInterest) nonPOIPDFs.add(*ipdf);
     }
 
-
   //create the final pdf
   RooAddPdf *pdf=new RooAddPdf("pdf","pdf", expPDFs, expFracs);
 
@@ -104,10 +104,9 @@ TTbarFracFitterResult_t TTbarFracFitter::fit(TObjArray &expTemplates, TH1F *data
   minuit.hesse();
   RooArgSet poi(*expFracs.find(poiName));
   result.minuitStatus = minuit.minos(poi);
-
+  
   //save result
   RooRealVar *fracVar=(RooRealVar *)expFracs.find(poiName);
-
   result.effExp=nExp[idxOfInterest]/totalExp;
   result.effExpUnc=nExpUnc[idxOfInterest]/totalExp;
   Float_t nObs    = fracVar->getVal()*totalExp;

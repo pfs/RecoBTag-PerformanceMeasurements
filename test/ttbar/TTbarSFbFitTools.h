@@ -17,7 +17,7 @@ class TTbarFracFitter
 {
  public:
   TTbarFracFitter();
-  TTbarFracFitterResult_t fit(TObjArray &fracTempl,TH1F *data,Int_t idxOfInterest=0,TString saveResultIn="");
+  TTbarFracFitterResult_t simpleFit(TObjArray &fracTempl,TH1F *data,Int_t idxOfInterest=0,TString saveResultIn="");
   TTbarFracFitterResult_t fit(TObjArray &passTemplates, TH1F *passDataH,
 			      TObjArray &failTemplates, TH1F *failDataH,
 			      Int_t idxOfInterest=0,TString saveResultIn="",

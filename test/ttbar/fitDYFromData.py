@@ -64,14 +64,14 @@ def main():
     templates=ROOT.TObjArray()
     templates.Add(dyTemplate)
     templates.Add(otherProc)
-    res=ttFracFitter.fit(templates,data,0,saveResultIn)
+    idxOfInterest=int(0)
+    print ttFracFitter,(templates,data,idxOfInterest,saveResultIn)
+    res=ttFracFitter.simpleFit(templates,data,idxOfInterest,saveResultIn)
 
     dySF=(res.sf,res.sfUnc)    
     print '-'*50
     print 'DY fit from data'
     print '-'*50
-    print 'Expected:',toLatexRounded(res.nExp,res.nExpUnc)
-    print 'Observed:',toLatexRounded(res.nObs,res.nObsUnc)
     print 'Scale factor:',toLatexRounded(res.sf,res.sfUnc)
     print '-'*50
 

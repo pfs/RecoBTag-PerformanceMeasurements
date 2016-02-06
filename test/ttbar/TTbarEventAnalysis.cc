@@ -39,6 +39,7 @@ void TTbarEventAnalysis::prepareOutput(TString outFile)
   kinTree_->Branch("jp",             &(jp_[0]),              "jp/F");
   kinTree_->Branch("svhe",           &(svhe_[0]),            "svhe/F");
   kinTree_->Branch("csv",            &(csv_[0]),             "csv/F");
+  kinTree_->Branch("cmva",           &(cmva_[0]),             "cmva/F");
   kinTree_->Branch("weight",         weight_,          "weight[15]/F");
 
   ftmTree_=new TTree("ftm","flavour tag matching");
@@ -52,6 +53,7 @@ void TTbarEventAnalysis::prepareOutput(TString outFile)
   ftmTree_->Branch("jp",             jp_,         "jp[2]/F");
   ftmTree_->Branch("svhe",           svhe_,       "svhe[2]/F");
   ftmTree_->Branch("csv",            csv_,        "csv[2]/F");
+  ftmTree_->Branch("cmva",           cmva_,       "cmva[2]/F");
   ftmTree_->Branch("kindisc",        kinDisc_,    "kindisc[2]/F");
   ftmTree_->Branch("weight",         weight_,     "weight[15]/F");
 
@@ -79,12 +81,15 @@ void TTbarEventAnalysis::prepareOutput(TString outFile)
   baseHistos["svhe"]=new TH1F("svhe",";Simple secondary vertex (HE);Jets",50,0,6);
   baseHistos["csv"]=new TH1F("csv",";Combined secondary vertex (IVF);Jets",50,0,1.1);
   baseHistos["tche"]=new TH1F("tche",";Track Counting High Efficiency;Jets",50,-20,50);
+  baseHistos["jettrk"]=new TH1F("jettrk",";Track multiplicity;Jets",20,0,20);
   baseHistos["jetseltrk"]=new TH1F("jetseltrk",";Selected track multiplicity;Jets",15,0,15);
   baseHistos["jp_leadkin"]=new TH1F("jp_leadkin",";Jet probability;Jets",50,0,3);
   baseHistos["svhe_leadkin"]=new TH1F("svhe_leadkin",";Simple secondary vertex (HE);Jets",50,0,6);
   baseHistos["csv_leadkin"]=new TH1F("csv_leadkin",";Combined secondary vertex (IVF);Jets",50,0,1.1);
+  baseHistos["cmva_leadkin"]=new TH1F("cmva_leadkin",";Combined MVA;Jets",50,0,1.1);
   baseHistos["tche_leadkin"]=new TH1F("tche_leadkin",";Track Counting High Efficiency;Jets",50,-20,50);
   baseHistos["jetseltrk_leadkin"]=new TH1F("jetseltrk_leadkin",";Selected track multiplicity;Jets",15,0,15);
+  baseHistos["jettrk_leadkin"]=new TH1F("jettrk_leadkin",";Track multiplicity;Jets",20,0,20);
   baseHistos["flavour"] = new TH1F("flavour",     ";Jet flavour;Jets",                   4,  0, 4 );
   baseHistos["flavour"]->GetXaxis()->SetBinLabel(1,"unmatched");
   baseHistos["flavour"]->GetXaxis()->SetBinLabel(2,"udsg");
@@ -146,7 +151,7 @@ void TTbarEventAnalysis::processFile(TString inFile,TH1F *xsecWgt,Bool_t isData)
       
       TString jranks[]={"leading",  "others",  "subleading" };
       for(size_t i=0; i<sizeof(jranks)/sizeof(TString); i++)
-	tmvaReader_->BookMVA("BDT_"+jranks[i], weightsDir_+"/"+jranks[i]+"/TMVAClassification_BDT.weights.xml");
+	tmvaReader_->BookMVA("BDT_"+jranks[i], weightsDir_+jranks[i]+"/TMVAClassification_BDT.weights.xml");
     }
 
   //prepare to read the tree (for jets only interested in a couple of variables)
@@ -163,8 +168,8 @@ void TTbarEventAnalysis::processFile(TString inFile,TH1F *xsecWgt,Bool_t isData)
     Float_t ttbar_w[500];
     Int_t nJet;
     Float_t Jet_pt[100],Jet_genpt[100],Jet_area[100],Jet_jes[100],Jet_eta[100],Jet_phi[100],Jet_mass[100];
-    Float_t Jet_Svx[100],Jet_CombIVF[100],Jet_Proba[100],Jet_Ip2P[100];
-    Int_t Jet_nseltracks[100];
+    Float_t Jet_Svx[100],Jet_CombIVF[100],Jet_cMVAv2[100],Jet_Proba[100],Jet_Ip2P[100];
+    Int_t Jet_nseltracks[100],Jet_ntracks[100];
     Int_t Jet_flavour[100];
   };
   MyEventInfoBranches_t ev;
@@ -199,8 +204,10 @@ void TTbarEventAnalysis::processFile(TString inFile,TH1F *xsecWgt,Bool_t isData)
   tree->SetBranchAddress("Jet_mass",        ev.Jet_mass);
   tree->SetBranchAddress("Jet_Svx",         ev.Jet_Svx);
   tree->SetBranchAddress("Jet_CombIVF",     ev.Jet_CombIVF);
+  tree->SetBranchAddress("Jet_cMVAv2",      ev.Jet_cMVAv2);
   tree->SetBranchAddress("Jet_Proba",       ev.Jet_Proba);
   tree->SetBranchAddress("Jet_Ip2P",        ev.Jet_Ip2P);
+  tree->SetBranchAddress("Jet_ntracks",     ev.Jet_ntracks);
   tree->SetBranchAddress("Jet_nseltracks",  ev.Jet_nseltracks);
   tree->SetBranchAddress("Jet_flavour",     ev.Jet_flavour);
 
@@ -471,6 +478,7 @@ void TTbarEventAnalysis::processFile(TString inFile,TH1F *xsecWgt,Bool_t isData)
 	  histos_[ch+"_svhe"]->Fill(ev.Jet_Svx[jetIdx],evWgt);
 	  histos_[ch+"_csv"]->Fill(ev.Jet_CombIVF[jetIdx],evWgt);
 	  histos_[ch+"_tche"]->Fill(ev.Jet_Ip2P[jetIdx],evWgt);
+	  histos_[ch+"_jettrk"]->Fill(ev.Jet_ntracks[jetIdx],evWgt);
 	  histos_[ch+"_jetseltrk"]->Fill(ev.Jet_nseltracks[jetIdx],evWgt);
 	  
 
@@ -504,7 +512,9 @@ void TTbarEventAnalysis::processFile(TString inFile,TH1F *xsecWgt,Bool_t isData)
 	      histos_[ch+"_jp_leadkin"]->Fill(ev.Jet_Proba[jetIdx],evWgt);
 	      histos_[ch+"_svhe_leadkin"]->Fill(ev.Jet_Svx[jetIdx],evWgt);
 	      histos_[ch+"_csv_leadkin"]->Fill(ev.Jet_CombIVF[jetIdx],evWgt);
+	      histos_[ch+"_cmva_leadkin"]->Fill(ev.Jet_cMVAv2[jetIdx],evWgt);
 	      histos_[ch+"_tche_leadkin"]->Fill(ev.Jet_Ip2P[jetIdx],evWgt);
+	      histos_[ch+"_jettrk_leadkin"]->Fill(ev.Jet_ntracks[jetIdx],evWgt);
 	      histos_[ch+"_jetseltrk_leadkin"]->Fill(ev.Jet_nseltracks[jetIdx],evWgt);
 	    }
 	}
@@ -571,6 +581,7 @@ void TTbarEventAnalysis::processFile(TString inFile,TH1F *xsecWgt,Bool_t isData)
 	  jp_[0]=ev.Jet_Proba[jetIdx];
 	  svhe_[0]=ev.Jet_Svx[jetIdx];
 	  csv_[0]=ev.Jet_CombIVF[jetIdx];
+	  cmva_[0]=ev.Jet_cMVAv2[jetIdx];
 
 	  kinTree_->Fill();
 	}
@@ -587,6 +598,7 @@ void TTbarEventAnalysis::processFile(TString inFile,TH1F *xsecWgt,Bool_t isData)
 	      jp_[ij]         = ev.Jet_Proba[jetIdx];
 	      svhe_[ij]       = ev.Jet_Svx[jetIdx];
 	      csv_[ij]        = ev.Jet_CombIVF[jetIdx];
+	      cmva_[ij]       = ev.Jet_cMVAv2[jetIdx];
 	      kinDisc_[ij]    = leadingkindisc[ij];
 	      //std::cout << ij << " " <<  jetFlavour_[ij] << " "
 	      //<< jetPt_[ij] << " " << csv_[ij]  << " " << kinDisc_[ij] 

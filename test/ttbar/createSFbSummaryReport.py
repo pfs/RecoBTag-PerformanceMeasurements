@@ -38,6 +38,7 @@ def buildSFbSummary(inF,title,outDir):
     SUMMARYCTR+=1
 
     #read results from the pickle file
+    print inF
     cachefile = open(inF,'r')
     fitInfo=pickle.load(cachefile)
     effExpected=pickle.load(cachefile)

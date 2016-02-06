@@ -23,12 +23,12 @@ def runTTbarAnalysis(inFile, outFile, wgt, tmvaWgts=None,isData=False):
     if 'TTJets' in inFile: evAnalysis.setReadTTJetsGenWeights(True)
 
     if isData:
-        if 'MuonEG'   in inFile : 
+        if 'MuonE' in inFile : 
             evAnalysis.addTriggerBit(0,-11*13)
             evAnalysis.addTriggerBit(1,-11*13)
-        if 'DoubleElectron' in inFile : 
+        if 'DoubleE' in inFile : 
             evAnalysis.addTriggerBit(2,-11*11)
-        if 'DoubleMuon' in inFile :
+        if 'DoubleMu' in inFile :
             evAnalysis.addTriggerBit(3,-13*13)
     else:
             evAnalysis.addTriggerBit(0,-11*13)

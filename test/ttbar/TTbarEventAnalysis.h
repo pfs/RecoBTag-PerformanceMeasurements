@@ -81,7 +81,7 @@ class TTbarEventAnalysis
   Float_t far_mlj_, far_deta_, far_dphi_, far_ptrel_,far_lj2ll_deta_, far_lj2ll_dphi_;
   Float_t  j2ll_deta_,j2ll_dphi_;
   Float_t kinDisc_[5];
-  Float_t jp_[2],svhe_[2],csv_[2];
+  Float_t jp_[2],svhe_[2],csv_[2],cmva_[2];
   std::vector<std::pair<Int_t,Int_t> > triggerBits_;
   TTree *kinTree_,*ftmTree_;
   std::map<TString,TH1F *> histos_;

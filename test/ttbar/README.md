@@ -20,7 +20,7 @@ Don't forget to init the environment for crab3
 (e.g. https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookCRAB3Tutorial)
 Other json files with samples (e.g. for systematics scans) are also available under data.
 ```
-python checkProductionIntegrity.py -i /store/group/phys_btag/performance/TTbar/4899b76 -o /store/group/phys_btag/performance/TTbar/2015_25ns/8622ee3
+python checkProductionIntegrity.py -i /store/group/phys_btag/performance/TTbar/147c139 -o /store/group/phys_btag/performance/TTbar/2015_25ns/147c139
 ```
 Can run as soon as ntuple production starts to end, to move from crab output directories to a more simple directory structure
 which can be easily parsed by the local analysis. 
@@ -35,7 +35,7 @@ a conservative +/-10% variation of the central minBias xsec value assumed.
 
 ### Running local analysis
 ```
-python runTTbarAnalysis.py -i /store/group/phys_btag/performance/TTbar/2015_25ns/8622ee3 -j data/samples_Run2015_25ns.json -n 8
+python runTTbarAnalysis.py -i /store/group/phys_btag/performance/TTbar/2015_25ns/147c139 -j data/samples_Run2015_25ns.json -n 8
 ```
 Once grid jobs are run, and ntuples are stored in a given directory, you can run the local analysis to produce the slimmed ntuples for the efficiency measurement.
 MC will be weighted by cross section. The number after -n indicates how many threads should be used.
@@ -46,7 +46,7 @@ See https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookCRAB3Tutorial and htt
 It prints out s.th. like "Produced normalization cache (analysis/.xsecweights.pck)"
 In case you update the trees, xsec or lumi you have to remove by hand the pickle file.
 ```
-python plotter.py -i analysis/ -j data/samples_Run2015_25ns.json  -l 2444
+python plotter.py -i analysis/ -j data/samples_Run2015_25ns.json  -l 2521
 ```
 Makes control plots and stores all in a ROOT file. Different options may be passed to filter plots, and show differently the plots. 
 ```
@@ -65,8 +65,8 @@ sh KIN_runClassifier.sh
 After running the local analysis use the kin tree stored in the ttbar sample to train a kinematics discriminator for b-jets in ttbar events.
 The script compiles and runs KIN_trainClassifier.C which should be modified in case different trainings are required.
 ```
-python runTTbarAnalysis.py -i /store/group/phys_btag/performance/TTbar/2015_25ns/8622ee3  -j data/samples_Run2015_25ns.json --tmvaWgts data/KIN/ --dyScale analysis/plots/.dyScaleFactor.pck  -n 8
-python runTTbarAnalysis.py -i /store/group/phys_btag/performance/TTbar/2015_25ns/8622ee3 -o analysis/syst -j data/syst_samples_Run2015_25ns.json --tmvaWgts data/KIN/ --dyScale analysis/plots/.dyScaleFactor.pck  -n 8
+python runTTbarAnalysis.py -i /store/group/phys_btag/performance/TTbar/2015_25ns/147c139  -j data/samples_Run2015_25ns.json --tmvaWgts data/KIN --dyScale analysis/plots/.dyScaleFactor.pck  -n 8
+python runTTbarAnalysis.py -i /store/group/phys_btag/performance/TTbar/2015_25ns/147c139 -o analysis/syst -j data/syst_samples_Run2015_25ns.json --tmvaWgts data/KIN --dyScale analysis/plots/.dyScaleFactor.pck  -n 8
 ```
 Re-run the analysis to store the KIN discriminator value per jet
 ```
